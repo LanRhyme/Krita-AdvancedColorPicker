@@ -2,6 +2,7 @@ import math
 import json
 from krita import *
 from .qt_compat import *
+from PyQt5.QtCore import QTimer
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None, config=None):
@@ -354,8 +355,14 @@ class SVSquare(QWidget):
         G = max(0, min(255, int((g+m)*255)))
         B = max(0, min(255, int((b+m)*255)))
         
+
         color = QColor(R, G, B)
         self.current_color = color
+        
+        docker = self.parent().parent() if hasattr(self.parent(), "parent") else None
+        if docker and hasattr(docker, "last_color"):
+            docker.last_color = color
+            
         self.colorSelected.emit(color)
 
 
@@ -606,6 +613,49 @@ class VhsvDocker(DockWidget):
         
         self.applyConfig()
         
+        self.last_color = QColor()
+        self.timer = QTimer(self)
+        self.timer.setInterval(100)
+        self.timer.timeout.connect(self.checkKritaColor)
+        self.timer.start()
+        
+
+    def checkKritaColor(self):
+        if not Krita.instance().activeWindow(): return
+        view = Krita.instance().activeWindow().activeView()
+        if not view: return
+        
+        try:
+            qcolor = view.foregroundColor().colorForCanvas(view.canvas())
+            
+            if qcolor != self.last_color:
+                self.last_color = qcolor
+                
+                if not self.sv_square.is_picking and not self.hue_selector.is_picking:
+                    h, s, v, a = qcolor.getHsvF()
+                    if h < 0: h = 0
+                    
+                    hue = h * 360.0
+                    self.hue_selector.hue = hue
+                    self.hue_selector.update()
+                    
+                    self.sv_square.hue = hue
+                    self.sv_square.v = v
+                    if self.sv_square.mode == "v-hsv":
+                        if v == 0:
+                            self.sv_square.s = 0.0
+                        else:
+                            import math
+                            self.sv_square.s = math.pow(s, 1.5 / (v + 0.5))
+                    else:
+                        self.sv_square.s = s
+                        
+                    self.sv_square.current_color = qcolor
+                    self.sv_square.updateImage(force=True)
+                    self.sv_square.update()
+        except Exception:
+            pass
+
     def saveConfig(self):
         try:
             cfg = self.config.copy()
