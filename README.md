@@ -27,4 +27,4 @@
 4.  使用右键点击拾色器区域即可打开专属设置界面
 
 ## 鸣谢 (Credits)
-> 本项目是基于 Kapyia 的开源项目 `sai_vhsv_picker` 进行深度修改和适配的版本。特此鸣谢原作者对于 Krita 色彩面板的开创性贡献！
+> 本项目是基于 Kapyia 的开源项目 [`sai_vhsv_picker`](https://github.com/Kapyia/sai_vhsv_picker) 进行深度修改和适配的版本。特此鸣谢原作者对于 Krita 色彩面板的开创性贡献！
