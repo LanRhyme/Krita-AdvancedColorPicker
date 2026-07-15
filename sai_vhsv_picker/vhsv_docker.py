@@ -406,13 +406,13 @@ class HueSelector(QWidget):
             
             painter.setRenderHint(RenderHint_Antialiasing)
             
-            gradient = QConicalGradient(center, 135)
+            gradient = QConicalGradient(center, 150)
             gradient.setColorAt(0.0, QColor(255, 0, 0))
-            gradient.setColorAt(60/360.0, QColor(255, 255, 0))
-            gradient.setColorAt(120/360.0, QColor(0, 255, 0))
+            gradient.setColorAt(60/360.0, QColor(255, 0, 255))
+            gradient.setColorAt(120/360.0, QColor(0, 0, 255))
             gradient.setColorAt(180/360.0, QColor(0, 255, 255))
-            gradient.setColorAt(240/360.0, QColor(0, 0, 255))
-            gradient.setColorAt(300/360.0, QColor(255, 0, 255))
+            gradient.setColorAt(240/360.0, QColor(0, 255, 0))
+            gradient.setColorAt(300/360.0, QColor(255, 255, 0))
             gradient.setColorAt(1.0, QColor(255, 0, 0))
             
             stroke_radius = radius - ring_width / 2.0
@@ -422,7 +422,7 @@ class HueSelector(QWidget):
             painter.setPen(pen)
             painter.drawEllipse(rect)
             
-            rad = math.radians(135 + self.hue)
+            rad = math.radians(150 - self.hue)
             cx = center.x() + stroke_radius * math.cos(rad)
             cy = center.y() - stroke_radius * math.sin(rad)
             
@@ -451,14 +451,14 @@ class HueSelector(QWidget):
     def updateHue(self, pos):
         if self.style == "slider":
             y = max(0, min(self.height(), pos.y()))
-            self.hue = (1.0 - (y / self.height())) * 360.0
+            new_hue = (1.0 - (y / self.height())) * 360.0
         else:
             w = self.width()
             h = self.height()
             dx = pos.x() - w / 2.0
             dy = h / 2.0 - pos.y()
             angle = math.degrees(math.atan2(dy, dx))
-            new_hue = angle - 135
+            new_hue = 150 - angle
             if new_hue < 0: new_hue += 360.0
             new_hue = new_hue % 360.0
             
