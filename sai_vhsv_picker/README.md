@@ -17,3 +17,6 @@
 2.  在 Krita 的插件管理器中启用本插件
 3.  在面板区域打开“Advanced Color Picker”
 4.  使用右键点击拾色器区域即可打开专属设置界面
+
+## 鸣谢 (Credits)
+> 本项目是基于 Kapyia 的开源项目 `sai_vhsv_picker` 进行深度修改和适配的版本。特此鸣谢原作者对于 Krita 色彩面板的开创性贡献！
