@@ -2,7 +2,6 @@ import math
 import json
 from krita import *
 from .qt_compat import *
-from PyQt5.QtCore import QTimer
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None, config=None):
