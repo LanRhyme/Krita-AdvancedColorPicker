@@ -1,5 +1,9 @@
 # Advanced Color Picker (V-HSV)
 
+![Screenshot](screenshot.png)
+
+
+
 完美复刻 SAI 色彩特性的 V-HSV 拾色器
 
 ## 功能特性
