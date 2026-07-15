@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=sai_vhsv_picker
+X-Python-2-Compatible=false
+X-Krita-Manual=Manual.html
+Name=Advanced Color Picker (V-HSV)
+Name[zh_CN]=Advanced Color Picker (V-HSV)
+Comment=V-HSV color picker for Krita
+Comment[zh_CN]=SAI 风格高级拾色器
