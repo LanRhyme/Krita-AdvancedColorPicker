@@ -40,8 +40,114 @@ class ColorSwatchWidget(QWidget):
         painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 6, 6)
 
 
+class ShadeRampWidget(QWidget):
+    """智能 7 阶冷暖/明暗色阶阶梯条 (Shadow -> Highlight)"""
+    colorSelected = pyqtSignal(QColor)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.colors = [QColor(255, 255, 255)] * 7
+
+    def updateColor(self, color):
+        if not color or not color.isValid(): return
+        h, s, v, _ = color.getHsvF()
+        if h < 0: h = 0.0
+
+        new_colors = []
+        for i in range(7):
+            t = (i - 3) / 3.0
+            v_step = max(0.05, min(1.0, v + t * 0.35))
+            s_step = max(0.0, min(1.0, s - t * 0.22))
+            h_step = (h * 360.0 + t * 8.0) % 360.0
+            new_colors.append(QColor.fromHsvF(h_step / 360.0, s_step, v_step))
+        self.colors = new_colors
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(RenderHint_Antialiasing)
+        w = self.width()
+        h = self.height()
+
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, w, h), 4, 4)
+        painter.setClipPath(path)
+
+        step_w = w / 7.0
+        for i in range(7):
+            painter.fillRect(QRectF(i * step_w, 0, step_w, h), self.colors[i])
+
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(128, 128, 128, 50), 1))
+        painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 4, 4)
+
+    def mousePressEvent(self, event):
+        if event.button() == RightButton: return
+        w = self.width()
+        if w <= 0: return
+        idx = int(event.pos().x() // (w / 7.0))
+        idx = max(0, min(6, idx))
+        self.colorSelected.emit(self.colors[idx])
+
+
+class HarmonyRampWidget(QWidget):
+    """色彩和谐 5 色推荐条 (互补色, 邻近色 1, 邻近色 2, 三原色 1, 三原色 2)"""
+    colorSelected = pyqtSignal(QColor)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.colors = [QColor(255, 255, 255)] * 5
+
+    def updateColor(self, color):
+        if not color or not color.isValid(): return
+        h, s, v, _ = color.getHsvF()
+        if h < 0: h = 0.0
+        h_deg = h * 360.0
+
+        h_comp = (h_deg + 180.0) % 360.0
+        h_ana1 = (h_deg - 30.0) % 360.0
+        h_ana2 = (h_deg + 30.0) % 360.0
+        h_tri1 = (h_deg + 120.0) % 360.0
+        h_tri2 = (h_deg + 240.0) % 360.0
+
+        self.colors = [
+            QColor.fromHsvF(h_comp / 360.0, s, v),
+            QColor.fromHsvF(h_ana1 / 360.0, s, v),
+            QColor.fromHsvF(h_ana2 / 360.0, s, v),
+            QColor.fromHsvF(h_tri1 / 360.0, s, v),
+            QColor.fromHsvF(h_tri2 / 360.0, s, v),
+        ]
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(RenderHint_Antialiasing)
+        w = self.width()
+        h = self.height()
+
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, w, h), 4, 4)
+        painter.setClipPath(path)
+
+        step_w = w / 5.0
+        for i in range(5):
+            painter.fillRect(QRectF(i * step_w, 0, step_w, h), self.colors[i])
+
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(128, 128, 128, 50), 1))
+        painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 4, 4)
+
+    def mousePressEvent(self, event):
+        if event.button() == RightButton: return
+        w = self.width()
+        if w <= 0: return
+        idx = int(event.pos().x() // (w / 5.0))
+        idx = max(0, min(4, idx))
+        self.colorSelected.emit(self.colors[idx])
+
+
 class ColorPreviewPopup(QFrame):
-    """精致 Morandi 主题色彩拾取预览浮窗，挂载在面板侧边"""
+    """精致 Morandi 主题色彩拾取与高阶辅助预览浮窗，挂载在面板侧边"""
     def __init__(self, parent=None):
         flags = (
             getattr(Qt, 'ToolTip', getattr(getattr(Qt, 'WindowType', None), 'ToolTip', 0)) |
@@ -50,51 +156,103 @@ class ColorPreviewPopup(QFrame):
         super().__init__(None, flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
 
-        self.setFixedSize(210, 140)
+        self.setFixedSize(220, 220)
 
         self.card = QFrame(self)
         self.card.setObjectName("ColorCard")
-        self.card.setFixedSize(210, 140)
+        self.card.setFixedSize(220, 220)
 
         self.refresh_theme_styles()
 
         layout = QVBoxLayout(self.card)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(5)
 
         # 1. 顶栏：新旧双色对比
         self.swatch = ColorSwatchWidget(self.card)
-        self.swatch.setFixedHeight(44)
+        self.swatch.setFixedHeight(38)
         layout.addWidget(self.swatch)
 
-        # 2. 中间：HEX 标示
+        # 2. 中间行：HEX 代码 + 前/背景色交换按钮
+        mid_row = QHBoxLayout()
+        mid_row.setContentsMargins(2, 0, 2, 0)
+
         self.hex_label = QLabel("#FFFFFF", self.card)
         self.hex_label.setAlignment(AlignCenter)
-        self.hex_label.setStyleSheet("font-size: 14px; font-weight: 700; letter-spacing: 1px;")
-        layout.addWidget(self.hex_label)
+        self.hex_label.setToolTip("HEX 色号")
+        self.hex_label.setStyleSheet("font-size: 13px; font-weight: 700; letter-spacing: 1px;")
 
-        # 3. 底部：RGB / HSV 详细参数
-        info_layout = QVBoxLayout()
-        info_layout.setSpacing(2)
+        self.btn_swap = QPushButton("⇄", self.card)
+        self.btn_swap.setFixedSize(22, 22)
+        self.btn_swap.setToolTip("互换前景色/背景色")
+        self.btn_swap.setStyleSheet("font-size: 13px; font-weight: bold; border-radius: 3px; padding: 0;")
+        self.btn_swap.clicked.connect(self._swap_fg_bg)
 
+        mid_row.addWidget(self.hex_label, 1)
+        mid_row.addWidget(self.btn_swap)
+        layout.addLayout(mid_row)
+
+        # 3. 智能冷暖/明暗 7 阶色阶条 (Shade Ramp)
+        shade_box = QVBoxLayout()
+        shade_box.setSpacing(2)
+        lbl_shade = QLabel("明暗冷暖色阶 (Shade Ramp)", self.card)
+        lbl_shade.setStyleSheet("font-size: 9px; opacity: 0.7;")
+        self.shade_ramp = ShadeRampWidget(self.card)
+        self.shade_ramp.setFixedHeight(18)
+        self.shade_ramp.colorSelected.connect(self._on_ramp_color_selected)
+        shade_box.addWidget(lbl_shade)
+        shade_box.addWidget(self.shade_ramp)
+        layout.addLayout(shade_box)
+
+        # 4. 推荐色彩和谐 5 色条 (Color Harmony)
+        harmony_box = QVBoxLayout()
+        harmony_box.setSpacing(2)
+        lbl_harmony = QLabel("和谐配色推荐 (Color Harmony)", self.card)
+        lbl_harmony.setStyleSheet("font-size: 9px; opacity: 0.7;")
+        self.harmony_ramp = HarmonyRampWidget(self.card)
+        self.harmony_ramp.setFixedHeight(18)
+        self.harmony_ramp.colorSelected.connect(self._on_ramp_color_selected)
+        harmony_box.addWidget(lbl_harmony)
+        harmony_box.addWidget(self.harmony_ramp)
+        layout.addLayout(harmony_box)
+
+        # 5. 底部：RGB / HSV 参数
+        info_layout = QHBoxLayout()
         self.rgb_label = QLabel("RGB: 255, 255, 255", self.card)
-        self.rgb_label.setAlignment(AlignCenter)
-        self.rgb_label.setStyleSheet("font-size: 11px; opacity: 0.85;")
-
+        self.rgb_label.setStyleSheet("font-size: 10px; opacity: 0.8;")
         self.hsv_label = QLabel("HSV: 0°, 0%, 100%", self.card)
-        self.hsv_label.setAlignment(AlignCenter)
-        self.hsv_label.setStyleSheet("font-size: 11px; opacity: 0.85;")
-
+        self.hsv_label.setStyleSheet("font-size: 10px; opacity: 0.8;")
+        self.hsv_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         info_layout.addWidget(self.rgb_label)
         info_layout.addWidget(self.hsv_label)
         layout.addLayout(info_layout)
 
+    def _swap_fg_bg(self):
+        if not Krita.instance().activeWindow(): return
+        view = Krita.instance().activeWindow().activeView()
+        if not view: return
+        try:
+            fg = view.foregroundColor()
+            bg = view.backgroundColor()
+            view.setForeGroundColor(bg)
+            view.setBackGroundColor(fg)
+        except Exception:
+            pass
+
+    def _on_ramp_color_selected(self, qcolor):
+        if not Krita.instance().activeWindow(): return
+        view = Krita.instance().activeWindow().activeView()
+        if not view: return
+        try:
+            ko_color = ManagedColor.fromQColor(qcolor)
+            view.setForeGroundColor(ko_color)
+        except Exception:
+            pass
+
     def refresh_theme_styles(self):
         app = QApplication.instance()
         pal = app.palette() if app else QPalette()
-        # 使用 QPalette.ColorRole.Window 完美匹配图层面板 / Krita DockWidget 背景色
         bg_window = pal.color(QPalette.ColorRole.Window).name()
         text_main = pal.color(QPalette.ColorRole.WindowText).name()
         border_col = pal.color(QPalette.ColorRole.Mid).name()
@@ -109,6 +267,14 @@ class ColorPreviewPopup(QFrame):
             QLabel {{
                 color: {text_main};
             }}
+            QPushButton {{
+                background-color: transparent;
+                color: {text_main};
+                border: 1px solid {border_col};
+            }}
+            QPushButton:hover {{
+                background-color: rgba(128, 128, 128, 0.2);
+            }}
         """)
 
     def update_color(self, curr_color, prev_color):
@@ -120,14 +286,17 @@ class ColorPreviewPopup(QFrame):
         hex_str = curr_color.name().upper()
         self.hex_label.setText(hex_str)
 
+        self.shade_ramp.updateColor(curr_color)
+        self.harmony_ramp.updateColor(curr_color)
+
         r, g, b = curr_color.red(), curr_color.green(), curr_color.blue()
-        self.rgb_label.setText(f"RGB: {r}, {g}, {b}")
+        self.rgb_label.setText(f"RGB: {r},{g},{b}")
 
         h, s, v, _ = curr_color.getHsv()
         if h < 0: h = 0
         s_pct = int((s / 255.0) * 100)
         v_pct = int((v / 255.0) * 100)
-        self.hsv_label.setText(f"HSV: {h}°, {s_pct}%, {v_pct}%")
+        self.hsv_label.setText(f"HSV: {h}°,{s_pct}%,{v_pct}%")
 
         self.card.update()
         self.update()
