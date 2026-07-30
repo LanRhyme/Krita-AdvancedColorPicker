@@ -832,7 +832,7 @@ class PickerContainer(QWidget):
 
 
 class AdvancedToolBar(QWidget):
-    """Pigment.O 灵感高阶工具栏：色域遮罩、明度/饱和度锁定、色彩空间切换 (Lucide SVG 图标模式)"""
+    """Pigment.O 灵感高阶工具栏：色域遮罩列表、色彩空间列表 (QMenu 下拉菜单模式)"""
     def __init__(self, docker, parent=None):
         super().__init__(parent)
         self.docker = docker
@@ -846,49 +846,88 @@ class AdvancedToolBar(QWidget):
         pal = app.palette() if app else QPalette()
         self.icon_col = pal.color(QPalette.ColorRole.WindowText).name()
 
+        # 1. 色域遮罩 QMenu 下拉列表
         self.btn_gamut = QToolButton(self)
-        self.btn_gamut.setText(" Off")
+        self.btn_gamut.setText(" Mask: Off")
         self.btn_gamut.setIcon(get_lucide_icon("shield", color=self.icon_col, size=14))
         self.btn_gamut.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.btn_gamut.setToolTip("色域遮罩限域 (Gamut Masking)")
-        self.btn_gamut.clicked.connect(self._cycle_gamut)
+        self.btn_gamut.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.btn_gamut.setToolTip("选择色域遮罩限域 (Gamut Masking)")
+        
+        self.gamut_menu = QMenu(self)
+        self.btn_gamut.setMenu(self.gamut_menu)
+        self._build_gamut_menu()
 
-        self.btn_lock_s = QToolButton(self)
-        self.btn_lock_s.setText(" S")
-        self.btn_lock_s.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
-        self.btn_lock_s.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.btn_lock_s.setToolTip("锁定饱和度 (Lock Saturation)")
-        self.btn_lock_s.setCheckable(True)
-        self.btn_lock_s.toggled.connect(self._toggle_lock_s)
-
-        self.btn_lock_v = QToolButton(self)
-        self.btn_lock_v.setText(" V")
-        self.btn_lock_v.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
-        self.btn_lock_v.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.btn_lock_v.setToolTip("锁定明度/光影黑白阶 (Lock Brightness/Value)")
-        self.btn_lock_v.setCheckable(True)
-        self.btn_lock_v.toggled.connect(self._toggle_lock_v)
-
+        # 2. 色彩空间 QMenu 下拉列表
         self.btn_space = QToolButton(self)
-        self.btn_space.setText(" v-HSV")
+        self.btn_space.setText(" Space: v-HSV")
         self.btn_space.setIcon(get_lucide_icon("sliders", color=self.icon_col, size=14))
         self.btn_space.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.btn_space.setToolTip("切换色彩空间 (v-HSV / HSV / HSL / HSY')")
-        self.btn_space.clicked.connect(self._cycle_space)
+        self.btn_space.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.btn_space.setToolTip("选择色彩空间 (v-HSV / HSV / HSL / HSY')")
+        
+        self.space_menu = QMenu(self)
+        self.btn_space.setMenu(self.space_menu)
+        self._build_space_menu()
 
         layout.addWidget(self.btn_gamut)
-        layout.addWidget(self.btn_lock_s)
-        layout.addWidget(self.btn_lock_v)
         layout.addStretch(1)
         layout.addWidget(self.btn_space)
 
         self.refresh_styles()
+
+    def _build_gamut_menu(self):
+        self.gamut_menu.clear()
+        masks = [
+            ("None", "无遮罩 (Off)"),
+            ("Triad", "三角形 (Triad)"),
+            ("Sunset", "暖夕阳 (Sunset)"),
+            ("Complementary", "对角补色 (Complementary)")
+        ]
+        curr = getattr(self.docker.sv_square, 'gamut_mask', "None")
+        for key, label in masks:
+            act = self.gamut_menu.addAction(label)
+            act.setCheckable(True)
+            if key == curr:
+                act.setChecked(True)
+            act.triggered.connect(lambda _, k=key, l=label: self._set_gamut(k, l))
+
+    def _set_gamut(self, key, label):
+        self.docker.sv_square.gamut_mask = key
+        self.docker.sv_square.update()
+        short_label = key if key != "None" else "Off"
+        self.btn_gamut.setText(f" Mask: {short_label}")
+        self._build_gamut_menu()
+
+    def _build_space_menu(self):
+        self.space_menu.clear()
+        spaces = [
+            ("v-hsv", "v-HSV (PaintTool SAI 视角)"),
+            ("hsv", "HSV (标准 HSV)"),
+            ("hsl", "HSL (Lightness 亮度模型)"),
+            ("hsy", "HSY' (Perceptual Luma 感知明度)")
+        ]
+        curr = self.docker.config.get("mode", "v-hsv")
+        for key, label in spaces:
+            act = self.space_menu.addAction(label)
+            act.setCheckable(True)
+            if key == curr:
+                act.setChecked(True)
+            act.triggered.connect(lambda _, k=key: self._set_space(k))
+
+    def _set_space(self, key):
+        labels = {"v-hsv": "v-HSV", "hsv": "HSV", "hsl": "HSL", "hsy": "HSY'"}
+        self.docker.config["mode"] = key
+        self.docker.applyConfig()
+        self.btn_space.setText(f" Space: {labels.get(key, key)}")
+        self._build_space_menu()
 
     def refresh_styles(self):
         app = QApplication.instance()
         pal = app.palette() if app else QPalette()
         text_main = pal.color(QPalette.ColorRole.WindowText).name()
         border_col = pal.color(QPalette.ColorRole.Mid).name()
+        bg_win = pal.color(QPalette.ColorRole.Window).name()
         self.icon_col = text_main
 
         qss = f"""
@@ -897,60 +936,32 @@ class AdvancedToolBar(QWidget):
                 color: {text_main};
                 border: 1px solid {border_col};
                 border-radius: 4px;
-                padding: 1px 5px;
+                padding: 2px 6px;
                 font-size: 11px;
                 font-weight: 500;
+            }}
+            QToolButton::menu-indicator {{
+                image: none;
+                width: 0px;
             }}
             QToolButton:hover {{
                 background-color: rgba(128, 128, 128, 0.2);
             }}
-            QToolButton:checked {{
+            QMenu {{
+                background-color: {bg_win};
+                color: {text_main};
+                border: 1px solid {border_col};
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 4px 20px 4px 10px;
+                border-radius: 3px;
+            }}
+            QMenu::item:selected {{
                 background-color: rgba(120, 140, 200, 0.35);
-                border: 1px solid rgba(120, 140, 200, 0.8);
-                font-weight: bold;
             }}
         """
         self.setStyleSheet(qss)
-
-    def _cycle_gamut(self):
-        masks = ["None", "Triad", "Sunset", "Complementary"]
-        labels = {"None": " Off", "Triad": " Triad", "Sunset": " Sunset", "Complementary": " Comp"}
-        curr = getattr(self.docker.sv_square, 'gamut_mask', "None")
-        next_idx = (masks.index(curr) + 1) % len(masks) if curr in masks else 0
-        nxt = masks[next_idx]
-        self.docker.sv_square.gamut_mask = nxt
-        self.docker.sv_square.update()
-        self.btn_gamut.setText(labels[nxt])
-
-    def _toggle_lock_s(self, checked):
-        self.docker.sv_square.lock_s = checked
-        if checked:
-            self.docker.sv_square.locked_s_val = self.docker.sv_square.s
-            self.btn_lock_s.setIcon(get_lucide_icon("lock", color=self.icon_col, size=14))
-            self.btn_lock_s.setText(" S [ON]")
-        else:
-            self.btn_lock_s.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
-            self.btn_lock_s.setText(" S")
-
-    def _toggle_lock_v(self, checked):
-        self.docker.sv_square.lock_v = checked
-        if checked:
-            self.docker.sv_square.locked_v_val = self.docker.sv_square.v
-            self.btn_lock_v.setIcon(get_lucide_icon("lock", color=self.icon_col, size=14))
-            self.btn_lock_v.setText(" V [ON]")
-        else:
-            self.btn_lock_v.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
-            self.btn_lock_v.setText(" V")
-
-    def _cycle_space(self):
-        modes = ["v-hsv", "hsv", "hsl", "hsy"]
-        labels = {"v-hsv": " v-HSV", "hsv": " HSV", "hsl": " HSL", "hsy": " HSY'"}
-        curr = self.docker.config.get("mode", "v-hsv")
-        next_idx = (modes.index(curr) + 1) % len(modes) if curr in modes else 0
-        nxt = modes[next_idx]
-        self.docker.config["mode"] = nxt
-        self.docker.applyConfig()
-        self.btn_space.setText(labels[nxt])
 
 
 class VhsvDocker(DockWidget):
@@ -1019,22 +1030,10 @@ class VhsvDocker(DockWidget):
             self.color_preview.popup_at(docker_widget=self)
 
     def hide_color_preview(self):
-        if not hasattr(self, '_hide_timer'):
-            self._hide_timer = QTimer(self)
-            self._hide_timer.setSingleShot(True)
-            self._hide_timer.timeout.connect(self._do_hide_color_preview)
-        self._hide_timer.start(1200)
-
-    def _do_hide_color_preview(self):
-        global_pos = QCursor.pos()
-        w = QApplication.widgetAt(global_pos)
-        if w:
-            if w == self or self.isAncestorOf(w):
-                return
-            if hasattr(self, 'color_preview') and self.color_preview:
-                if w == self.color_preview or self.color_preview.isAncestorOf(w):
-                    return
-        self.color_preview.hide()
+        if hasattr(self, '_hide_timer'):
+            self._hide_timer.stop()
+        if hasattr(self, 'color_preview') and self.color_preview:
+            self.color_preview.hide()
 
     def showEvent(self, event):
         super().showEvent(event)
