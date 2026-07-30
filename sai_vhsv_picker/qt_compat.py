@@ -1,6 +1,6 @@
 try:
     from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect, QPoint, QByteArray
-    from PyQt6.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette, QPainterPath, QPolygonF, QIcon
+    from PyQt6.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette, QPainterPath, QPolygonF, QIcon, QPixmap
     from PyQt6.QtSvg import QSvgRenderer
     from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox, QApplication, QLabel, QFrame, QInputDialog, QMenu, QToolButton
     
@@ -19,7 +19,7 @@ try:
     
 except ImportError:
     from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect, QPoint, QByteArray
-    from PyQt5.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette, QPainterPath, QPolygonF, QIcon
+    from PyQt5.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette, QPainterPath, QPolygonF, QIcon, QPixmap
     from PyQt5.QtSvg import QSvgRenderer
     from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox, QApplication, QLabel, QFrame, QInputDialog, QMenu, QToolButton
     
