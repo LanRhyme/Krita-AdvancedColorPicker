@@ -1,6 +1,6 @@
 try:
     from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect, QPoint
-    from PyQt6.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette
+    from PyQt6.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette, QPainterPath
     from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox, QApplication, QLabel, QFrame
     
     # Enums PyQt6
@@ -18,7 +18,7 @@ try:
     
 except ImportError:
     from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect, QPoint
-    from PyQt5.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette
+    from PyQt5.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette, QPainterPath
     from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox, QApplication, QLabel, QFrame
     
     # Enums PyQt5

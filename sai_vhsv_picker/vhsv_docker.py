@@ -4,7 +4,7 @@ from krita import *
 from .qt_compat import *
 
 class ColorSwatchWidget(QWidget):
-    """双色对比矩形色块 (左: 当前新颜色, 右: 历史原颜色)"""
+    """双色对比无缝矩形色块 (左: 当前新颜色, 右: 历史原颜色，0 缝隙极致易对比)"""
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_color = QColor(255, 255, 255)
@@ -22,14 +22,22 @@ class ColorSwatchWidget(QWidget):
         h = self.height()
         half_w = w / 2.0
         
-        # 左侧: 新颜色
-        painter.setPen(QPen(Color_transparent))
-        painter.setBrush(QBrush(self.current_color, BrushStyle_SolidPattern))
-        painter.drawRoundedRect(QRectF(0, 0, half_w - 1, h), 4, 4)
+        # 1. 建立整体外边缘 6px 圆角剪裁路径
+        path = QPainterPath()
+        path.addRoundedRect(QRectF(0, 0, w, h), 6, 6)
+        painter.setClipPath(path)
 
-        # 右侧: 旧颜色
-        painter.setBrush(QBrush(self.previous_color, BrushStyle_SolidPattern))
-        painter.drawRoundedRect(QRectF(half_w + 1, 0, half_w - 1, h), 4, 4)
+        # 2. 左半部分: 新颜色 (0px 缝隙)
+        painter.setPen(QPen(Color_transparent))
+        painter.fillRect(QRectF(0, 0, half_w, h), self.current_color)
+
+        # 3. 右半部分: 旧颜色 (0px 缝隙无缝对接)
+        painter.fillRect(QRectF(half_w, 0, half_w, h), self.previous_color)
+
+        # 4. 外圈微边框
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(128, 128, 128, 60), 1))
+        painter.drawRoundedRect(QRectF(0.5, 0.5, w - 1, h - 1), 6, 6)
 
 
 class ColorPreviewPopup(QFrame):
@@ -86,13 +94,14 @@ class ColorPreviewPopup(QFrame):
     def refresh_theme_styles(self):
         app = QApplication.instance()
         pal = app.palette() if app else QPalette()
-        bg_base = pal.color(QPalette.ColorRole.Base).name()
+        # 使用 QPalette.ColorRole.Window 完美匹配图层面板 / Krita DockWidget 背景色
+        bg_window = pal.color(QPalette.ColorRole.Window).name()
         text_main = pal.color(QPalette.ColorRole.WindowText).name()
         border_col = pal.color(QPalette.ColorRole.Mid).name()
 
         self.card.setStyleSheet(f"""
             QFrame#ColorCard {{
-                background-color: {bg_base};
+                background-color: {bg_window};
                 color: {text_main};
                 border: 1px solid {border_col};
                 border-radius: 8px;
