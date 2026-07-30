@@ -771,8 +771,8 @@ class PickerContainer(QWidget):
             pw -= hist_size
             
         if self.style == "slider":
-            self.sv.setGeometry(px, py, pw - 20, ph)
-            self.hue.setGeometry(px + pw - 16, py, 16, ph)
+            self.sv.setGeometry(px, py, pw - 25, ph)
+            self.hue.setGeometry(px + pw - 20, py, 20, ph)
         else:
             size = min(pw, ph)
             x_offset = px + (pw - size) // 2
@@ -780,7 +780,8 @@ class PickerContainer(QWidget):
             
             self.hue.setGeometry(x_offset, y_offset, size, size)
             
-            sq_size = int((size - 28) * 0.707)
+            inner_radius = size / 2.0 - 20
+            sq_size = int((inner_radius * 2) * 0.707) - 2
             sq_x = x_offset + (size - sq_size) // 2
             sq_y = y_offset + (size - sq_size) // 2
             
@@ -979,8 +980,8 @@ class VhsvDocker(DockWidget):
             
         self.main_widget = QWidget()
         self.main_layout = QVBoxLayout()
-        self.main_layout.setContentsMargins(2, 2, 2, 2)
-        self.main_layout.setSpacing(1)
+        self.main_layout.setContentsMargins(5, 5, 5, 5)
+        self.main_layout.setSpacing(2)
         
         self.sv_square = SVSquare()
         self.hue_selector = HueSelector()
