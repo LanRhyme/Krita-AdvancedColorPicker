@@ -419,17 +419,26 @@ class SVSquare(QWidget):
         for x in range(self.res):
             s = x / float(self.res - 1)
             for y in range(self.res):
-                v = 1.0 - (y / float(self.res - 1))
+                val_y = 1.0 - (y / float(self.res - 1))
                 
                 if self.mode == "v-hsv":
-                    s_adj = math.pow(s, (v + 0.5) / 1.5) if s > 0 else 0.0
-                    c = v * s_adj
-                else:
-                    c = v * s
+                    s_adj = math.pow(s, (val_y + 0.5) / 1.5) if s > 0 else 0.0
+                    c = val_y * s_adj
+                    m = val_y - c
+                    x_val = c * (1 - abs(hp % 2 - 1))
+                elif self.mode == "hsl":
+                    c = (1.0 - abs(2.0 * val_y - 1.0)) * s
+                    x_val = c * (1 - abs(hp % 2 - 1))
+                    m = val_y - c / 2.0
+                elif self.mode == "hsy":
+                    c = val_y * s
+                    x_val = c * (1 - abs(hp % 2 - 1))
+                    m = val_y - (0.299 * c + 0.587 * x_val)
+                else: # hsv
+                    c = val_y * s
+                    x_val = c * (1 - abs(hp % 2 - 1))
+                    m = val_y - c
                     
-                x_val = c * (1 - abs(hp % 2 - 1))
-                m = v - c
-                
                 if hp < 1: r,g,b = c, x_val, 0
                 elif hp < 2: r,g,b = x_val, c, 0
                 elif hp < 3: r,g,b = 0, c, x_val
@@ -547,12 +556,21 @@ class SVSquare(QWidget):
         if self.mode == "v-hsv":
             s_adj = math.pow(self.s, (self.v + 0.5) / 1.5) if self.s > 0 else 0.0
             c = self.v * s_adj
+            m = self.v - c
+            x_val = c * (1 - abs(hp % 2 - 1))
+        elif self.mode == "hsl":
+            c = (1.0 - abs(2.0 * self.v - 1.0)) * self.s
+            x_val = c * (1 - abs(hp % 2 - 1))
+            m = self.v - c / 2.0
+        elif self.mode == "hsy":
+            c = self.v * self.s
+            x_val = c * (1 - abs(hp % 2 - 1))
+            m = self.v - (0.299 * c + 0.587 * x_val)
         else:
             c = self.v * self.s
+            m = self.v - c
+            x_val = c * (1 - abs(hp % 2 - 1))
             
-        x_val = c * (1 - abs(hp % 2 - 1))
-        m = self.v - c
-        
         if hp < 1: r,g,b = c, x_val, 0
         elif hp < 2: r,g,b = x_val, c, 0
         elif hp < 3: r,g,b = 0, c, x_val
@@ -564,7 +582,6 @@ class SVSquare(QWidget):
         G = max(0, min(255, int((g+m)*255)))
         B = max(0, min(255, int((b+m)*255)))
         
-
         color = QColor(R, G, B)
         self.current_color = color
         
@@ -784,63 +801,8 @@ class PickerContainer(QWidget):
             self.history.hide()
 
 
-class ColorMixerTray(QFrame):
-    """Pigment.O 灵感物理颜料混色板 Drawer"""
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedHeight(30)
-        self.colors = [QColor(255, 255, 255)] * 5
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 2, 4, 2)
-        layout.setSpacing(4)
-
-        self.buttons = []
-        for i in range(5):
-            btn = QPushButton(self)
-            btn.setFixedHeight(24)
-            btn.setFlat(True)
-            btn.clicked.connect(lambda _, idx=i: self._on_select(idx))
-            layout.addWidget(btn)
-            self.buttons.append(btn)
-        
-        self.refresh_mix()
-
-    def refresh_mix(self):
-        if not Krita.instance().activeWindow(): return
-        view = Krita.instance().activeWindow().activeView()
-        if not view: return
-        try:
-            fg = view.foregroundColor().colorForCanvas(view.canvas())
-            bg = view.backgroundColor().colorForCanvas(view.canvas())
-            
-            self.colors = []
-            for i in range(5):
-                t = i / 4.0
-                r = int(fg.red() * (1 - t) + bg.red() * t)
-                g = int(fg.green() * (1 - t) + bg.green() * t)
-                b = int(fg.blue() * (1 - t) + bg.blue() * t)
-                col = QColor(r, g, b)
-                self.colors.append(col)
-                self.buttons[i].setStyleSheet(f"background-color: {col.name()}; border: 1px solid rgba(128,128,128,0.4); border-radius: 3px;")
-        except Exception:
-            pass
-
-    def _on_select(self, idx):
-        if idx < 0 or idx >= len(self.colors): return
-        qcol = self.colors[idx]
-        if not Krita.instance().activeWindow(): return
-        view = Krita.instance().activeWindow().activeView()
-        if not view: return
-        try:
-            ko_color = ManagedColor.fromQColor(qcol)
-            view.setForeGroundColor(ko_color)
-        except Exception:
-            pass
-
-
 class AdvancedToolBar(QWidget):
-    """Pigment.O 灵感高阶工具栏：混色板、色域遮罩、明度/饱和度锁定、色彩空间切换"""
+    """Pigment.O 灵感高阶工具栏：色域遮罩、明度/饱和度锁定、色彩空间切换 (极简文字模式，绝无 Emoji)"""
     def __init__(self, docker, parent=None):
         super().__init__(parent)
         self.docker = docker
@@ -850,35 +812,28 @@ class AdvancedToolBar(QWidget):
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(4)
 
-        self.btn_mixer = QToolButton(self)
-        self.btn_mixer.setText("🎨 混色")
-        self.btn_mixer.setToolTip("颜料物理混色板 (Pigment Mixer)")
-        self.btn_mixer.setCheckable(True)
-        self.btn_mixer.toggled.connect(self._toggle_mixer)
-
         self.btn_gamut = QToolButton(self)
-        self.btn_gamut.setText("🛡️ 遮罩: 无")
+        self.btn_gamut.setText("Mask: Off")
         self.btn_gamut.setToolTip("色域遮罩限域 (Gamut Masking)")
         self.btn_gamut.clicked.connect(self._cycle_gamut)
 
         self.btn_lock_s = QToolButton(self)
-        self.btn_lock_s.setText("🔓 S")
+        self.btn_lock_s.setText("Lock S")
         self.btn_lock_s.setToolTip("锁定饱和度 (Lock Saturation)")
         self.btn_lock_s.setCheckable(True)
         self.btn_lock_s.toggled.connect(self._toggle_lock_s)
 
         self.btn_lock_v = QToolButton(self)
-        self.btn_lock_v.setText("🔓 V")
+        self.btn_lock_v.setText("Lock V")
         self.btn_lock_v.setToolTip("锁定明度/光影黑白阶 (Lock Brightness/Value)")
         self.btn_lock_v.setCheckable(True)
         self.btn_lock_v.toggled.connect(self._toggle_lock_v)
 
         self.btn_space = QToolButton(self)
-        self.btn_space.setText("HSV")
-        self.btn_space.setToolTip("切换色彩空间 (HSV / HSL / HSY')")
+        self.btn_space.setText("v-HSV")
+        self.btn_space.setToolTip("切换色彩空间 (v-HSV / HSV / HSL / HSY')")
         self.btn_space.clicked.connect(self._cycle_space)
 
-        layout.addWidget(self.btn_mixer)
         layout.addWidget(self.btn_gamut)
         layout.addWidget(self.btn_lock_s)
         layout.addWidget(self.btn_lock_v)
@@ -914,15 +869,9 @@ class AdvancedToolBar(QWidget):
         """
         self.setStyleSheet(qss)
 
-    def _toggle_mixer(self, checked):
-        if hasattr(self.docker, 'mixer_tray'):
-            self.docker.mixer_tray.setVisible(checked)
-            if checked:
-                self.docker.mixer_tray.refresh_mix()
-
     def _cycle_gamut(self):
         masks = ["None", "Triad", "Sunset", "Complementary"]
-        labels = {"None": "🛡️ 遮罩: 无", "Triad": "🛡️ 遮罩: 三角", "Sunset": "🛡️ 遮罩: 暖夕阳", "Complementary": "🛡️ 遮罩: 对角补色"}
+        labels = {"None": "Mask: Off", "Triad": "Mask: Triad", "Sunset": "Mask: Sunset", "Complementary": "Mask: Comp"}
         curr = getattr(self.docker.sv_square, 'gamut_mask', "None")
         next_idx = (masks.index(curr) + 1) % len(masks) if curr in masks else 0
         nxt = masks[next_idx]
@@ -934,17 +883,17 @@ class AdvancedToolBar(QWidget):
         self.docker.sv_square.lock_s = checked
         if checked:
             self.docker.sv_square.locked_s_val = self.docker.sv_square.s
-            self.btn_lock_s.setText("🔒 S")
+            self.btn_lock_s.setText("Lock S [ON]")
         else:
-            self.btn_lock_s.setText("🔓 S")
+            self.btn_lock_s.setText("Lock S")
 
     def _toggle_lock_v(self, checked):
         self.docker.sv_square.lock_v = checked
         if checked:
             self.docker.sv_square.locked_v_val = self.docker.sv_square.v
-            self.btn_lock_v.setText("🔒 V")
+            self.btn_lock_v.setText("Lock V [ON]")
         else:
-            self.btn_lock_v.setText("🔓 V")
+            self.btn_lock_v.setText("Lock V")
 
     def _cycle_space(self):
         modes = ["v-hsv", "hsv", "hsl", "hsy"]
@@ -991,13 +940,9 @@ class VhsvDocker(DockWidget):
             self.history.colors = hist_colors[:60]
         
         self.picker_container = PickerContainer(self.sv_square, self.hue_selector, self.history)
-        
-        self.mixer_tray = ColorMixerTray(self)
-        self.mixer_tray.hide()
         self.toolbar = AdvancedToolBar(self)
 
         self.main_layout.addWidget(self.picker_container, 1)
-        self.main_layout.addWidget(self.mixer_tray)
         self.main_layout.addWidget(self.toolbar)
 
         self.main_widget.setLayout(self.main_layout)
