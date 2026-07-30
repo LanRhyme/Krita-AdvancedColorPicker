@@ -469,29 +469,44 @@ class SVSquare(QWidget):
             mask_path = QPainterPath()
             mask_path.addRect(QRectF(0, 0, w, h))
 
+            cut_path = QPainterPath()
             if gamut_mask == "Triad":
                 poly = QPolygonF([
-                    QPointF(w * 0.08, h * 0.92),
-                    QPointF(w * 0.92, h * 0.92),
-                    QPointF(w * 0.5, h * 0.08)
+                    QPointF(w * 0.1, h * 0.1),
+                    QPointF(w * 0.9, h * 0.1),
+                    QPointF(w * 0.5, h * 0.9)
                 ])
-                cut_path = QPainterPath()
                 cut_path.addPolygon(poly)
-                mask_path = mask_path.subtracted(cut_path)
+            elif gamut_mask == "Dominant":
+                poly = QPolygonF([
+                    QPointF(w * 0.1, h * 0.9),
+                    QPointF(w * 0.9, h * 0.1),
+                    QPointF(w * 0.9, h * 0.9)
+                ])
+                cut_path.addPolygon(poly)
             elif gamut_mask == "Sunset":
                 poly = QPolygonF([
-                    QPointF(w * 0.15, h * 0.85),
-                    QPointF(w * 0.95, h * 0.55),
-                    QPointF(w * 0.65, h * 0.1)
+                    QPointF(w * 0.15, h * 0.15),
+                    QPointF(w * 0.85, h * 0.35),
+                    QPointF(w * 0.65, h * 0.9),
+                    QPointF(w * 0.15, h * 0.85)
                 ])
-                cut_path = QPainterPath()
                 cut_path.addPolygon(poly)
-                mask_path = mask_path.subtracted(cut_path)
+            elif gamut_mask == "Atmosphere":
+                poly = QPolygonF([
+                    QPointF(w * 0.5, h * 0.1),
+                    QPointF(w * 0.85, h * 0.5),
+                    QPointF(w * 0.5, h * 0.9),
+                    QPointF(w * 0.15, h * 0.5)
+                ])
+                cut_path.addPolygon(poly)
             elif gamut_mask == "Complementary":
-                cut_path = QPainterPath()
-                cut_path.addRect(QRectF(w * 0.25, 0, w * 0.5, h))
-                mask_path = mask_path.subtracted(cut_path)
+                cut_path.addRect(QRectF(w * 0.1, 0, w * 0.3, h))
+                cut_path.addRect(QRectF(w * 0.6, 0, w * 0.3, h))
+            elif gamut_mask == "Muted":
+                cut_path.addRect(QRectF(w * 0.05, h * 0.1, w * 0.45, h * 0.8))
 
+            mask_path = mask_path.subtracted(cut_path)
             painter.setPen(QPen(Color_transparent))
             painter.setBrush(QBrush(QColor(0, 0, 0, 135)))
             painter.drawPath(mask_path)
@@ -536,24 +551,42 @@ class SVSquare(QWidget):
         if gamut_mask == "None":
             return s, v
 
-        if gamut_mask == "Complementary":
-            s = max(0.25, min(0.75, s))
-        elif gamut_mask == "Triad":
-            y = 1.0 - v
-            y = max(0.08, min(0.92, y))
-            t = (y - 0.08) / 0.84
-            min_s = 0.5 - 0.42 * t
-            max_s = 0.5 + 0.42 * t
+        y = 1.0 - v
+        if gamut_mask == "Triad":
+            y = max(0.1, min(0.9, y))
+            t = (0.9 - y) / 0.8
+            min_s = 0.5 - 0.4 * t
+            max_s = 0.5 + 0.4 * t
+            s = max(min_s, min(max_s, s))
+            v = 1.0 - y
+        elif gamut_mask == "Dominant":
+            y = max(0.1, min(0.9, y))
+            min_s = 0.1 + 0.8 * (y - 0.1) / 0.8
+            max_s = 0.9
             s = max(min_s, min(max_s, s))
             v = 1.0 - y
         elif gamut_mask == "Sunset":
-            y = 1.0 - v
-            y = max(0.1, min(0.85, y))
-            t = (y - 0.1) / 0.75
-            min_s = 0.65 - 0.5 * t
-            max_s = 0.65 + 0.3 * t
+            y = max(0.15, min(0.9, y))
+            t = (y - 0.15) / 0.75
+            min_s = 0.15
+            max_s = 0.85 - 0.2 * t
             s = max(min_s, min(max_s, s))
             v = 1.0 - y
+        elif gamut_mask == "Atmosphere":
+            y = max(0.1, min(0.9, y))
+            dist_y = abs(y - 0.5) / 0.4
+            half_w = 0.35 * (1.0 - dist_y)
+            min_s = 0.5 - half_w
+            max_s = 0.5 + half_w
+            s = max(min_s, min(max_s, s))
+            v = 1.0 - y
+        elif gamut_mask == "Complementary":
+            s = max(0.1, min(0.9, s))
+            if 0.4 < s < 0.5: s = 0.4
+            elif 0.5 <= s < 0.6: s = 0.6
+        elif gamut_mask == "Muted":
+            s = max(0.05, min(0.5, s))
+            v = max(0.1, min(0.9, v))
 
         return s, v
 
@@ -880,9 +913,12 @@ class AdvancedToolBar(QWidget):
         self.gamut_menu.clear()
         masks = [
             ("None", "无遮罩 (Off)"),
-            ("Triad", "三角形 (Triad)"),
+            ("Triad", "正三角形 (Triad)"),
+            ("Dominant", "主色高光 (Dominant)"),
             ("Sunset", "暖夕阳 (Sunset)"),
-            ("Complementary", "对角补色 (Complementary)")
+            ("Atmosphere", "大气高雾 (Atmosphere)"),
+            ("Complementary", "双极补色 (Complementary)"),
+            ("Muted", "低饱和灰度 (Muted)")
         ]
         curr = getattr(self.docker.sv_square, 'gamut_mask', "None")
         for key, label in masks:
