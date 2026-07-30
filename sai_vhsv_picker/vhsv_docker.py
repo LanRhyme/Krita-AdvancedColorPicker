@@ -3,6 +3,166 @@ import json
 from krita import *
 from .qt_compat import *
 
+class ColorSwatchWidget(QWidget):
+    """双色对比矩形色块 (左: 当前新颜色, 右: 历史原颜色)"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.current_color = QColor(255, 255, 255)
+        self.previous_color = QColor(200, 200, 200)
+
+    def setColors(self, curr, prev):
+        self.current_color = QColor(curr)
+        self.previous_color = QColor(prev)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(RenderHint_Antialiasing)
+        w = self.width()
+        h = self.height()
+        half_w = w / 2.0
+        
+        # 左侧: 新颜色
+        painter.setPen(QPen(Color_transparent))
+        painter.setBrush(QBrush(self.current_color, BrushStyle_SolidPattern))
+        painter.drawRoundedRect(QRectF(0, 0, half_w - 1, h), 4, 4)
+
+        # 右侧: 旧颜色
+        painter.setBrush(QBrush(self.previous_color, BrushStyle_SolidPattern))
+        painter.drawRoundedRect(QRectF(half_w + 1, 0, half_w - 1, h), 4, 4)
+
+
+class ColorPreviewPopup(QFrame):
+    """精致 Morandi 主题色彩拾取预览浮窗，挂载在面板侧边"""
+    def __init__(self, parent=None):
+        flags = (
+            getattr(Qt, 'ToolTip', getattr(getattr(Qt, 'WindowType', None), 'ToolTip', 0)) |
+            getattr(Qt, 'FramelessWindowHint', getattr(getattr(Qt, 'WindowType', None), 'FramelessWindowHint', 0))
+        )
+        super().__init__(None, flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+
+        self.setFixedSize(210, 140)
+
+        self.card = QFrame(self)
+        self.card.setObjectName("ColorCard")
+        self.card.setFixedSize(210, 140)
+
+        self.refresh_theme_styles()
+
+        layout = QVBoxLayout(self.card)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(6)
+
+        # 1. 顶栏：新旧双色对比
+        self.swatch = ColorSwatchWidget(self.card)
+        self.swatch.setFixedHeight(44)
+        layout.addWidget(self.swatch)
+
+        # 2. 中间：HEX 标示
+        self.hex_label = QLabel("#FFFFFF", self.card)
+        self.hex_label.setAlignment(AlignCenter)
+        self.hex_label.setStyleSheet("font-size: 14px; font-weight: 700; letter-spacing: 1px;")
+        layout.addWidget(self.hex_label)
+
+        # 3. 底部：RGB / HSV 详细参数
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+
+        self.rgb_label = QLabel("RGB: 255, 255, 255", self.card)
+        self.rgb_label.setAlignment(AlignCenter)
+        self.rgb_label.setStyleSheet("font-size: 11px; opacity: 0.85;")
+
+        self.hsv_label = QLabel("HSV: 0°, 0%, 100%", self.card)
+        self.hsv_label.setAlignment(AlignCenter)
+        self.hsv_label.setStyleSheet("font-size: 11px; opacity: 0.85;")
+
+        info_layout.addWidget(self.rgb_label)
+        info_layout.addWidget(self.hsv_label)
+        layout.addLayout(info_layout)
+
+    def refresh_theme_styles(self):
+        app = QApplication.instance()
+        pal = app.palette() if app else QPalette()
+        bg_base = pal.color(QPalette.ColorRole.Base).name()
+        text_main = pal.color(QPalette.ColorRole.WindowText).name()
+        border_col = pal.color(QPalette.ColorRole.Mid).name()
+
+        self.card.setStyleSheet(f"""
+            QFrame#ColorCard {{
+                background-color: {bg_base};
+                color: {text_main};
+                border: 1px solid {border_col};
+                border-radius: 8px;
+            }}
+            QLabel {{
+                color: {text_main};
+            }}
+        """)
+
+    def update_color(self, curr_color, prev_color):
+        if not curr_color or not curr_color.isValid():
+            return
+        
+        self.swatch.setColors(curr_color, prev_color or curr_color)
+
+        hex_str = curr_color.name().upper()
+        self.hex_label.setText(hex_str)
+
+        r, g, b = curr_color.red(), curr_color.green(), curr_color.blue()
+        self.rgb_label.setText(f"RGB: {r}, {g}, {b}")
+
+        h, s, v, _ = curr_color.getHsv()
+        if h < 0: h = 0
+        s_pct = int((s / 255.0) * 100)
+        v_pct = int((v / 255.0) * 100)
+        self.hsv_label.setText(f"HSV: {h}°, {s_pct}%, {v_pct}%")
+
+        self.card.update()
+        self.update()
+
+    def popup_at(self, docker_widget=None):
+        if self.isVisible():
+            self.card.update()
+            self.update()
+            self.raise_()
+            return
+
+        screen = QApplication.primaryScreen()
+        geo = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
+
+        if docker_widget and docker_widget.isVisible():
+            d_left = docker_widget.mapToGlobal(QPoint(0, 0)).x()
+            d_right = docker_widget.mapToGlobal(QPoint(docker_widget.width(), 0)).x()
+            d_top = docker_widget.mapToGlobal(QPoint(0, 0)).y()
+            d_height = docker_widget.height()
+
+            if d_left - geo.left() >= self.width() + 10:
+                x = d_left - self.width() - 8
+            elif geo.right() - d_right >= self.width() + 10:
+                x = d_right + 8
+            else:
+                x = d_left + 16
+
+            y = d_top + (d_height - self.height()) // 2
+            if y + self.height() > geo.bottom():
+                y = geo.bottom() - self.height() - 8
+            if y < geo.top():
+                y = geo.top() + 8
+        else:
+            pos = QCursor.pos()
+            x = pos.x() + 16
+            y = pos.y() - 50
+
+        self.move(x, y)
+        self.show()
+        self.raise_()
+        self.card.update()
+        self.update()
+
+
 class SettingsDialog(QDialog):
     def __init__(self, parent=None, config=None):
         super().__init__(parent)
@@ -286,18 +446,6 @@ class SVSquare(QWidget):
         painter.drawEllipse(QPointF(cursor_x, cursor_y), 4, 4)
         painter.setPen(QPen(Color_black, 1))
         painter.drawEllipse(QPointF(cursor_x, cursor_y), 5, 5)
-        
-        if self.is_picking and self.show_preview:
-            popup_x = cursor_x + 15
-            popup_y = cursor_y - 30
-            if popup_x > self.width() - 40: popup_x = cursor_x - 40
-            if popup_y < 0: popup_y = cursor_y + 15
-            
-            painter.setPen(QPen(Color_black, 1))
-            painter.fillRect(popup_x, popup_y, 30, 15, self.current_color)
-            painter.drawRect(popup_x, popup_y, 30, 15)
-            painter.fillRect(popup_x, popup_y + 15, 30, 15, self.previous_color)
-            painter.drawRect(popup_x, popup_y + 15, 30, 15)
 
     def mousePressEvent(self, event):
         if event.button() == RightButton:
@@ -320,6 +468,8 @@ class SVSquare(QWidget):
         if event.button() == RightButton:
             return
         self.is_picking = False
+        if hasattr(self, 'docker') and self.docker:
+            self.docker.hide_color_preview()
         self.pickingEnded.emit()
         self.update()
 
@@ -330,6 +480,8 @@ class SVSquare(QWidget):
         self.v = 1.0 - (y / self.height())
         self.update()
         self.emitColor()
+        if self.is_picking and hasattr(self, 'docker') and self.docker:
+            self.docker.show_color_preview(self.current_color, self.previous_color)
         
     def emitColor(self):
         hp = self.hue / 60.0
@@ -438,11 +590,15 @@ class HueSelector(QWidget):
         self.is_picking = True
         self.pickingStarted.emit()
         self.updateHue(event.pos())
+        if hasattr(self, 'docker') and self.docker and hasattr(self.docker, 'sv_square'):
+            self.docker.show_color_preview(self.docker.sv_square.current_color, self.docker.sv_square.previous_color)
 
     def mouseReleaseEvent(self, event):
         if event.button() == RightButton:
             return
         self.is_picking = False
+        if hasattr(self, 'docker') and self.docker:
+            self.docker.hide_color_preview()
         self.pickingEnded.emit()
         
     def mouseMoveEvent(self, event):
@@ -466,6 +622,8 @@ class HueSelector(QWidget):
             self.hue = new_hue
             self.hueChanged.emit(self.hue)
             self.update()
+        if self.is_picking and hasattr(self, 'docker') and self.docker and hasattr(self.docker, 'sv_square'):
+            self.docker.show_color_preview(self.docker.sv_square.current_color, self.docker.sv_square.previous_color)
 
 
 class PickerContainer(QWidget):
@@ -591,6 +749,11 @@ class VhsvDocker(DockWidget):
         self.hue_selector = HueSelector()
         self.history = ColorHistory()
         
+        self.color_preview = ColorPreviewPopup(self)
+        self.color_preview.hide()
+        self.sv_square.docker = self
+        self.hue_selector.docker = self
+        
         if "history" in self.config:
             hist_colors = [QColor(h) for h in self.config["history"]]
             while len(hist_colors) < 60: hist_colors.append(QColor(240, 240, 240))
@@ -609,6 +772,14 @@ class VhsvDocker(DockWidget):
         self.sv_square.pickingStarted.connect(self.onPickingStarted)
         self.sv_square.pickingEnded.connect(self.onPickingEnded)
         self.history.colorSelected.connect(self.onHistorySelected)
+
+    def show_color_preview(self, current_color, previous_color):
+        if self.config.get("show_preview", True):
+            self.color_preview.update_color(current_color, previous_color)
+            self.color_preview.popup_at(docker_widget=self)
+
+    def hide_color_preview(self):
+        self.color_preview.hide()
         
         self.applyConfig()
         

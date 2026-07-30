@@ -1,7 +1,7 @@
 try:
-    from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect
-    from PyQt6.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient
-    from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox
+    from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect, QPoint
+    from PyQt6.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette
+    from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox, QApplication, QLabel, QFrame
     
     # Enums PyQt6
     ImageFormat_RGB32 = QImage.Format.Format_RGB32
@@ -17,9 +17,9 @@ try:
     AlignCenter = Qt.AlignmentFlag.AlignCenter
     
 except ImportError:
-    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect
-    from PyQt5.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient
-    from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox
+    from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QPointF, QRectF, QRect, QPoint
+    from PyQt5.QtGui import QPainter, QImage, QColor, QPen, QBrush, QCursor, QConicalGradient, QLinearGradient, QFont, QPalette
+    from PyQt5.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QBoxLayout, QGridLayout, QDockWidget, QPushButton, QDialog, QRadioButton, QGroupBox, QFormLayout, QCheckBox, QComboBox, QApplication, QLabel, QFrame
     
     # Enums PyQt5
     ImageFormat_RGB32 = QImage.Format_RGB32
