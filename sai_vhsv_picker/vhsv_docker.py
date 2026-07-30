@@ -446,8 +446,45 @@ class SVSquare(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(RenderHint_SmoothPixmapTransform)
+        painter.setRenderHint(RenderHint_Antialiasing)
         painter.drawImage(self.rect(), self._image)
-        
+
+        w = float(self.width())
+        h = float(self.height())
+
+        # 绘制色域遮罩 (Gamut Masking)
+        gamut_mask = getattr(self, 'gamut_mask', 'None')
+        if gamut_mask != "None":
+            mask_path = QPainterPath()
+            mask_path.addRect(QRectF(0, 0, w, h))
+
+            if gamut_mask == "Triad":
+                poly = QPolygonF([
+                    QPointF(w * 0.08, h * 0.92),
+                    QPointF(w * 0.92, h * 0.92),
+                    QPointF(w * 0.5, h * 0.08)
+                ])
+                cut_path = QPainterPath()
+                cut_path.addPolygon(poly)
+                mask_path = mask_path.subtracted(cut_path)
+            elif gamut_mask == "Sunset":
+                poly = QPolygonF([
+                    QPointF(w * 0.15, h * 0.85),
+                    QPointF(w * 0.95, h * 0.55),
+                    QPointF(w * 0.65, h * 0.1)
+                ])
+                cut_path = QPainterPath()
+                cut_path.addPolygon(poly)
+                mask_path = mask_path.subtracted(cut_path)
+            elif gamut_mask == "Complementary":
+                cut_path = QPainterPath()
+                cut_path.addRect(QRectF(w * 0.25, 0, w * 0.5, h))
+                mask_path = mask_path.subtracted(cut_path)
+
+            painter.setPen(QPen(Color_transparent))
+            painter.setBrush(QBrush(QColor(0, 0, 0, 135)))
+            painter.drawPath(mask_path)
+
         cursor_x = int(self.s * self.width())
         cursor_y = int((1.0 - self.v) * self.height())
         painter.setPen(QPen(Color_white, 1))
@@ -466,6 +503,8 @@ class SVSquare(QWidget):
         else:
             self.previous_color = self.current_color
             
+        self.locked_s_val = self.s
+        self.locked_v_val = self.v
         self.pickingStarted.emit()
         self.updateValue(event.pos())
 
@@ -482,10 +521,21 @@ class SVSquare(QWidget):
         self.update()
 
     def updateValue(self, pos):
-        x = max(0, min(self.width(), pos.x()))
-        y = max(0, min(self.height(), pos.y()))
-        self.s = x / self.width()
-        self.v = 1.0 - (y / self.height())
+        w = max(1.0, float(self.width()))
+        h = max(1.0, float(self.height()))
+        x = max(0.0, min(w, float(pos.x())))
+        y = max(0.0, min(h, float(pos.y())))
+
+        new_s = x / w
+        new_v = 1.0 - (y / h)
+
+        if getattr(self, 'lock_s', False) and hasattr(self, 'locked_s_val'):
+            new_s = self.locked_s_val
+        if getattr(self, 'lock_v', False) and hasattr(self, 'locked_v_val'):
+            new_v = self.locked_v_val
+
+        self.s = new_s
+        self.v = new_v
         self.update()
         self.emitColor()
         if self.is_picking and hasattr(self, 'docker') and self.docker:
@@ -734,6 +784,179 @@ class PickerContainer(QWidget):
             self.history.hide()
 
 
+class ColorMixerTray(QFrame):
+    """Pigment.O 灵感物理颜料混色板 Drawer"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(30)
+        self.colors = [QColor(255, 255, 255)] * 5
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(4)
+
+        self.buttons = []
+        for i in range(5):
+            btn = QPushButton(self)
+            btn.setFixedHeight(24)
+            btn.setFlat(True)
+            btn.clicked.connect(lambda _, idx=i: self._on_select(idx))
+            layout.addWidget(btn)
+            self.buttons.append(btn)
+        
+        self.refresh_mix()
+
+    def refresh_mix(self):
+        if not Krita.instance().activeWindow(): return
+        view = Krita.instance().activeWindow().activeView()
+        if not view: return
+        try:
+            fg = view.foregroundColor().colorForCanvas(view.canvas())
+            bg = view.backgroundColor().colorForCanvas(view.canvas())
+            
+            self.colors = []
+            for i in range(5):
+                t = i / 4.0
+                r = int(fg.red() * (1 - t) + bg.red() * t)
+                g = int(fg.green() * (1 - t) + bg.green() * t)
+                b = int(fg.blue() * (1 - t) + bg.blue() * t)
+                col = QColor(r, g, b)
+                self.colors.append(col)
+                self.buttons[i].setStyleSheet(f"background-color: {col.name()}; border: 1px solid rgba(128,128,128,0.4); border-radius: 3px;")
+        except Exception:
+            pass
+
+    def _on_select(self, idx):
+        if idx < 0 or idx >= len(self.colors): return
+        qcol = self.colors[idx]
+        if not Krita.instance().activeWindow(): return
+        view = Krita.instance().activeWindow().activeView()
+        if not view: return
+        try:
+            ko_color = ManagedColor.fromQColor(qcol)
+            view.setForeGroundColor(ko_color)
+        except Exception:
+            pass
+
+
+class AdvancedToolBar(QWidget):
+    """Pigment.O 灵感高阶工具栏：混色板、色域遮罩、明度/饱和度锁定、色彩空间切换"""
+    def __init__(self, docker, parent=None):
+        super().__init__(parent)
+        self.docker = docker
+        self.setFixedHeight(28)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(4, 2, 4, 2)
+        layout.setSpacing(4)
+
+        self.btn_mixer = QToolButton(self)
+        self.btn_mixer.setText("🎨 混色")
+        self.btn_mixer.setToolTip("颜料物理混色板 (Pigment Mixer)")
+        self.btn_mixer.setCheckable(True)
+        self.btn_mixer.toggled.connect(self._toggle_mixer)
+
+        self.btn_gamut = QToolButton(self)
+        self.btn_gamut.setText("🛡️ 遮罩: 无")
+        self.btn_gamut.setToolTip("色域遮罩限域 (Gamut Masking)")
+        self.btn_gamut.clicked.connect(self._cycle_gamut)
+
+        self.btn_lock_s = QToolButton(self)
+        self.btn_lock_s.setText("🔓 S")
+        self.btn_lock_s.setToolTip("锁定饱和度 (Lock Saturation)")
+        self.btn_lock_s.setCheckable(True)
+        self.btn_lock_s.toggled.connect(self._toggle_lock_s)
+
+        self.btn_lock_v = QToolButton(self)
+        self.btn_lock_v.setText("🔓 V")
+        self.btn_lock_v.setToolTip("锁定明度/光影黑白阶 (Lock Brightness/Value)")
+        self.btn_lock_v.setCheckable(True)
+        self.btn_lock_v.toggled.connect(self._toggle_lock_v)
+
+        self.btn_space = QToolButton(self)
+        self.btn_space.setText("HSV")
+        self.btn_space.setToolTip("切换色彩空间 (HSV / HSL / HSY')")
+        self.btn_space.clicked.connect(self._cycle_space)
+
+        layout.addWidget(self.btn_mixer)
+        layout.addWidget(self.btn_gamut)
+        layout.addWidget(self.btn_lock_s)
+        layout.addWidget(self.btn_lock_v)
+        layout.addStretch(1)
+        layout.addWidget(self.btn_space)
+
+        self.refresh_styles()
+
+    def refresh_styles(self):
+        app = QApplication.instance()
+        pal = app.palette() if app else QPalette()
+        text_main = pal.color(QPalette.ColorRole.WindowText).name()
+        border_col = pal.color(QPalette.ColorRole.Mid).name()
+
+        qss = f"""
+            QToolButton {{
+                background-color: transparent;
+                color: {text_main};
+                border: 1px solid {border_col};
+                border-radius: 4px;
+                padding: 1px 5px;
+                font-size: 11px;
+                font-weight: 500;
+            }}
+            QToolButton:hover {{
+                background-color: rgba(128, 128, 128, 0.2);
+            }}
+            QToolButton:checked {{
+                background-color: rgba(120, 140, 200, 0.35);
+                border: 1px solid rgba(120, 140, 200, 0.8);
+                font-weight: bold;
+            }}
+        """
+        self.setStyleSheet(qss)
+
+    def _toggle_mixer(self, checked):
+        if hasattr(self.docker, 'mixer_tray'):
+            self.docker.mixer_tray.setVisible(checked)
+            if checked:
+                self.docker.mixer_tray.refresh_mix()
+
+    def _cycle_gamut(self):
+        masks = ["None", "Triad", "Sunset", "Complementary"]
+        labels = {"None": "🛡️ 遮罩: 无", "Triad": "🛡️ 遮罩: 三角", "Sunset": "🛡️ 遮罩: 暖夕阳", "Complementary": "🛡️ 遮罩: 对角补色"}
+        curr = getattr(self.docker.sv_square, 'gamut_mask', "None")
+        next_idx = (masks.index(curr) + 1) % len(masks) if curr in masks else 0
+        nxt = masks[next_idx]
+        self.docker.sv_square.gamut_mask = nxt
+        self.docker.sv_square.update()
+        self.btn_gamut.setText(labels[nxt])
+
+    def _toggle_lock_s(self, checked):
+        self.docker.sv_square.lock_s = checked
+        if checked:
+            self.docker.sv_square.locked_s_val = self.docker.sv_square.s
+            self.btn_lock_s.setText("🔒 S")
+        else:
+            self.btn_lock_s.setText("🔓 S")
+
+    def _toggle_lock_v(self, checked):
+        self.docker.sv_square.lock_v = checked
+        if checked:
+            self.docker.sv_square.locked_v_val = self.docker.sv_square.v
+            self.btn_lock_v.setText("🔒 V")
+        else:
+            self.btn_lock_v.setText("🔓 V")
+
+    def _cycle_space(self):
+        modes = ["v-hsv", "hsv", "hsl", "hsy"]
+        labels = {"v-hsv": "v-HSV", "hsv": "HSV", "hsl": "HSL", "hsy": "HSY'"}
+        curr = self.docker.config.get("mode", "v-hsv")
+        next_idx = (modes.index(curr) + 1) % len(modes) if curr in modes else 0
+        nxt = modes[next_idx]
+        self.docker.config["mode"] = nxt
+        self.docker.applyConfig()
+        self.btn_space.setText(labels[nxt])
+
+
 class VhsvDocker(DockWidget):
     def __init__(self):
         super().__init__()
@@ -751,7 +974,7 @@ class VhsvDocker(DockWidget):
         self.main_widget = QWidget()
         self.main_layout = QVBoxLayout()
         self.main_layout.setContentsMargins(5, 5, 5, 5)
-        self.main_layout.setSpacing(0)
+        self.main_layout.setSpacing(2)
         
         self.sv_square = SVSquare()
         self.hue_selector = HueSelector()
@@ -769,7 +992,14 @@ class VhsvDocker(DockWidget):
         
         self.picker_container = PickerContainer(self.sv_square, self.hue_selector, self.history)
         
+        self.mixer_tray = ColorMixerTray(self)
+        self.mixer_tray.hide()
+        self.toolbar = AdvancedToolBar(self)
+
         self.main_layout.addWidget(self.picker_container, 1)
+        self.main_layout.addWidget(self.mixer_tray)
+        self.main_layout.addWidget(self.toolbar)
+
         self.main_widget.setLayout(self.main_layout)
         self.setWidget(self.main_widget)
         
