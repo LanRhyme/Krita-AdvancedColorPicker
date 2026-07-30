@@ -1078,12 +1078,18 @@ class VhsvDocker(DockWidget):
         self.timer.timeout.connect(self.checkKritaColor)
         self.timer.start()
 
-        try:
-            notifier = Krita.instance().notifier()
-            if notifier and hasattr(notifier, 'imageUpdated'):
-                notifier.imageUpdated.connect(self.onCanvasImageUpdated)
-        except Exception:
-            pass
+        app = QApplication.instance()
+        if app:
+            app.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if hasattr(self, '_pending_history_color') and self._pending_history_color:
+            ev_type = event.type()
+            if ev_type in (QEvent.Type.MouseButtonPress, QEvent.Type.TabletPress):
+                global_pos = QCursor.pos()
+                if not self.rect().contains(self.mapFromGlobal(global_pos)):
+                    self._commit_pending_history_color()
+        return super().eventFilter(obj, event)
 
     def stage_pending_color(self, qcolor):
         if qcolor and qcolor.isValid():
@@ -1095,9 +1101,6 @@ class VhsvDocker(DockWidget):
             self._pending_history_color = None
             self.history.addColor(color)
             self.saveConfig()
-
-    def onCanvasImageUpdated(self, image=None):
-        self._commit_pending_history_color()
 
     def show_color_preview(self, current_color, previous_color):
         if self.config.get("show_preview", True):
