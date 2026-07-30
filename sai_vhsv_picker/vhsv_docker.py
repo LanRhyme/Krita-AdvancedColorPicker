@@ -486,10 +486,9 @@ class SVSquare(QWidget):
                 cut_path.addPolygon(poly)
             elif gamut_mask == "Sunset":
                 poly = QPolygonF([
-                    QPointF(w * 0.15, h * 0.15),
-                    QPointF(w * 0.85, h * 0.35),
-                    QPointF(w * 0.65, h * 0.9),
-                    QPointF(w * 0.15, h * 0.85)
+                    QPointF(w * 0.15, h * 0.85),
+                    QPointF(w * 0.95, h * 0.55),
+                    QPointF(w * 0.65, h * 0.1)
                 ])
                 cut_path.addPolygon(poly)
             elif gamut_mask == "Atmosphere":
@@ -546,40 +545,61 @@ class SVSquare(QWidget):
         self.pickingEnded.emit()
         self.update()
 
+    def _clamp_point_to_polygon(self, poly, pt):
+        if poly.containsPoint(pt, Qt.FillRule.OddEvenFill):
+            return pt
+
+        closest_pt = pt
+        min_dist_sq = float('inf')
+        count = poly.count()
+
+        for i in range(count):
+            p1 = poly.at(i)
+            p2 = poly.at((i + 1) % count)
+
+            dx = p2.x() - p1.x()
+            dy = p2.y() - p1.y()
+            seg_len_sq = dx * dx + dy * dy
+
+            if seg_len_sq == 0:
+                proj_pt = p1
+            else:
+                t = max(0.0, min(1.0, ((pt.x() - p1.x()) * dx + (pt.y() - p1.y()) * dy) / seg_len_sq))
+                proj_pt = QPointF(p1.x() + t * dx, p1.y() + t * dy)
+
+            dist_sq = (pt.x() - proj_pt.x()) ** 2 + (pt.y() - proj_pt.y()) ** 2
+            if dist_sq < min_dist_sq:
+                min_dist_sq = dist_sq
+                closest_pt = proj_pt
+
+        return closest_pt
+
     def _clamp_to_gamut(self, s, v):
         gamut_mask = getattr(self, 'gamut_mask', 'None')
         if gamut_mask == "None":
             return s, v
 
-        y = 1.0 - v
-        if gamut_mask == "Triad":
-            y = max(0.1, min(0.9, y))
-            t = (0.9 - y) / 0.8
-            min_s = 0.5 - 0.4 * t
-            max_s = 0.5 + 0.4 * t
-            s = max(min_s, min(max_s, s))
-            v = 1.0 - y
-        elif gamut_mask == "Dominant":
-            y = max(0.1, min(0.9, y))
-            min_s = 0.1 + 0.8 * (y - 0.1) / 0.8
-            max_s = 0.9
-            s = max(min_s, min(max_s, s))
-            v = 1.0 - y
-        elif gamut_mask == "Sunset":
-            y = max(0.15, min(0.9, y))
-            t = (y - 0.15) / 0.75
-            min_s = 0.15
-            max_s = 0.85 - 0.2 * t
-            s = max(min_s, min(max_s, s))
-            v = 1.0 - y
-        elif gamut_mask == "Atmosphere":
-            y = max(0.1, min(0.9, y))
-            dist_y = abs(y - 0.5) / 0.4
-            half_w = 0.35 * (1.0 - dist_y)
-            min_s = 0.5 - half_w
-            max_s = 0.5 + half_w
-            s = max(min_s, min(max_s, s))
-            v = 1.0 - y
+        w = max(1.0, float(self.width()))
+        h = max(1.0, float(self.height()))
+        pt = QPointF(s * w, (1.0 - v) * h)
+
+        if gamut_mask in ["Triad", "Dominant", "Sunset", "Atmosphere"]:
+            poly = None
+            if gamut_mask == "Triad":
+                poly = QPolygonF([QPointF(w * 0.1, h * 0.1), QPointF(w * 0.9, h * 0.1), QPointF(w * 0.5, h * 0.9)])
+            elif gamut_mask == "Dominant":
+                poly = QPolygonF([QPointF(w * 0.1, h * 0.9), QPointF(w * 0.9, h * 0.1), QPointF(w * 0.9, h * 0.9)])
+            elif gamut_mask == "Sunset":
+                poly = QPolygonF([QPointF(w * 0.15, h * 0.85), QPointF(w * 0.95, h * 0.55), QPointF(w * 0.65, h * 0.1)])
+            elif gamut_mask == "Atmosphere":
+                poly = QPolygonF([QPointF(w * 0.5, h * 0.1), QPointF(w * 0.85, h * 0.5), QPointF(w * 0.5, h * 0.9), QPointF(w * 0.15, h * 0.5)])
+
+            if poly:
+                clamped_pt = self._clamp_point_to_polygon(poly, pt)
+                new_s = max(0.0, min(1.0, clamped_pt.x() / w))
+                new_v = max(0.0, min(1.0, 1.0 - (clamped_pt.y() / h)))
+                return new_s, new_v
+
         elif gamut_mask == "Complementary":
             s = max(0.1, min(0.9, s))
             if 0.4 < s < 0.5: s = 0.4
