@@ -104,19 +104,14 @@ class HarmonyRampWidget(QWidget):
         if h < 0: h = 0.0
         h_deg = h * 360.0
 
-        h_comp = (h_deg + 180.0) % 360.0
-        h_ana1 = (h_deg - 30.0) % 360.0
-        h_ana2 = (h_deg + 30.0) % 360.0
-        h_tri1 = (h_deg + 120.0) % 360.0
-        h_tri2 = (h_deg + 240.0) % 360.0
+        # 大师级专业调和配色算法 (柔和互补、暖色同系、冷色同系、优雅分裂补色 A/B)
+        c_comp = QColor.fromHsvF(((h_deg + 180.0) % 360.0) / 360.0, max(0.1, s * 0.75), max(0.2, v * 0.85))
+        c_ana1 = QColor.fromHsvF(((h_deg + 25.0) % 360.0) / 360.0, s, min(1.0, v * 1.05))
+        c_ana2 = QColor.fromHsvF(((h_deg - 25.0) % 360.0) / 360.0, max(0.1, s * 0.85), max(0.2, v * 0.95))
+        c_spl1 = QColor.fromHsvF(((h_deg + 150.0) % 360.0) / 360.0, max(0.1, s * 0.8), max(0.2, v * 0.9))
+        c_spl2 = QColor.fromHsvF(((h_deg + 210.0) % 360.0) / 360.0, max(0.1, s * 0.8), max(0.2, v * 0.9))
 
-        self.colors = [
-            QColor.fromHsvF(h_comp / 360.0, s, v),
-            QColor.fromHsvF(h_ana1 / 360.0, s, v),
-            QColor.fromHsvF(h_ana2 / 360.0, s, v),
-            QColor.fromHsvF(h_tri1 / 360.0, s, v),
-            QColor.fromHsvF(h_tri2 / 360.0, s, v),
-        ]
+        self.colors = [c_comp, c_ana1, c_ana2, c_spl1, c_spl2]
         self.update()
 
     def paintEvent(self, event):
@@ -961,10 +956,27 @@ class VhsvDocker(DockWidget):
 
     def show_color_preview(self, current_color, previous_color):
         if self.config.get("show_preview", True):
+            if hasattr(self, '_hide_timer'):
+                self._hide_timer.stop()
             self.color_preview.update_color(current_color, previous_color)
             self.color_preview.popup_at(docker_widget=self)
 
     def hide_color_preview(self):
+        if not hasattr(self, '_hide_timer'):
+            self._hide_timer = QTimer(self)
+            self._hide_timer.setSingleShot(True)
+            self._hide_timer.timeout.connect(self._do_hide_color_preview)
+        self._hide_timer.start(1200)
+
+    def _do_hide_color_preview(self):
+        global_pos = QCursor.pos()
+        w = QApplication.widgetAt(global_pos)
+        if w:
+            if w == self or self.isAncestorOf(w):
+                return
+            if hasattr(self, 'color_preview') and self.color_preview:
+                if w == self.color_preview or self.color_preview.isAncestorOf(w):
+                    return
         self.color_preview.hide()
 
     def showEvent(self, event):
