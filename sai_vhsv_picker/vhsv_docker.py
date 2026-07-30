@@ -2,6 +2,7 @@ import math
 import json
 from krita import *
 from .qt_compat import *
+from .lucide_icons import get_lucide_icon
 
 class ColorSwatchWidget(QWidget):
     """双色对比无缝矩形色块 (左: 当前新颜色, 右: 历史原颜色，0 缝隙极致易对比)"""
@@ -98,6 +99,7 @@ class ColorPreviewPopup(QFrame):
         text_main = pal.color(QPalette.ColorRole.WindowText).name()
         border_col = pal.color(QPalette.ColorRole.Mid).name()
 
+        self.setStyleSheet(f"background-color: {bg_window}; border-radius: 8px;")
         self.card.setStyleSheet(f"""
             QFrame#ColorCard {{
                 background-color: {bg_window};
@@ -529,6 +531,32 @@ class SVSquare(QWidget):
         self.pickingEnded.emit()
         self.update()
 
+    def _clamp_to_gamut(self, s, v):
+        gamut_mask = getattr(self, 'gamut_mask', 'None')
+        if gamut_mask == "None":
+            return s, v
+
+        if gamut_mask == "Complementary":
+            s = max(0.25, min(0.75, s))
+        elif gamut_mask == "Triad":
+            y = 1.0 - v
+            y = max(0.08, min(0.92, y))
+            t = (y - 0.08) / 0.84
+            min_s = 0.5 - 0.42 * t
+            max_s = 0.5 + 0.42 * t
+            s = max(min_s, min(max_s, s))
+            v = 1.0 - y
+        elif gamut_mask == "Sunset":
+            y = 1.0 - v
+            y = max(0.1, min(0.85, y))
+            t = (y - 0.1) / 0.75
+            min_s = 0.65 - 0.5 * t
+            max_s = 0.65 + 0.3 * t
+            s = max(min_s, min(max_s, s))
+            v = 1.0 - y
+
+        return s, v
+
     def updateValue(self, pos):
         w = max(1.0, float(self.width()))
         h = max(1.0, float(self.height()))
@@ -542,6 +570,8 @@ class SVSquare(QWidget):
             new_s = self.locked_s_val
         if getattr(self, 'lock_v', False) and hasattr(self, 'locked_v_val'):
             new_v = self.locked_v_val
+
+        new_s, new_v = self._clamp_to_gamut(new_s, new_v)
 
         self.s = new_s
         self.v = new_v
@@ -802,7 +832,7 @@ class PickerContainer(QWidget):
 
 
 class AdvancedToolBar(QWidget):
-    """Pigment.O 灵感高阶工具栏：色域遮罩、明度/饱和度锁定、色彩空间切换 (极简文字模式，绝无 Emoji)"""
+    """Pigment.O 灵感高阶工具栏：色域遮罩、明度/饱和度锁定、色彩空间切换 (Lucide SVG 图标模式)"""
     def __init__(self, docker, parent=None):
         super().__init__(parent)
         self.docker = docker
@@ -812,25 +842,37 @@ class AdvancedToolBar(QWidget):
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(4)
 
+        app = QApplication.instance()
+        pal = app.palette() if app else QPalette()
+        self.icon_col = pal.color(QPalette.ColorRole.WindowText).name()
+
         self.btn_gamut = QToolButton(self)
-        self.btn_gamut.setText("Mask: Off")
+        self.btn_gamut.setText(" Off")
+        self.btn_gamut.setIcon(get_lucide_icon("shield", color=self.icon_col, size=14))
+        self.btn_gamut.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_gamut.setToolTip("色域遮罩限域 (Gamut Masking)")
         self.btn_gamut.clicked.connect(self._cycle_gamut)
 
         self.btn_lock_s = QToolButton(self)
-        self.btn_lock_s.setText("Lock S")
+        self.btn_lock_s.setText(" S")
+        self.btn_lock_s.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
+        self.btn_lock_s.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_lock_s.setToolTip("锁定饱和度 (Lock Saturation)")
         self.btn_lock_s.setCheckable(True)
         self.btn_lock_s.toggled.connect(self._toggle_lock_s)
 
         self.btn_lock_v = QToolButton(self)
-        self.btn_lock_v.setText("Lock V")
+        self.btn_lock_v.setText(" V")
+        self.btn_lock_v.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
+        self.btn_lock_v.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_lock_v.setToolTip("锁定明度/光影黑白阶 (Lock Brightness/Value)")
         self.btn_lock_v.setCheckable(True)
         self.btn_lock_v.toggled.connect(self._toggle_lock_v)
 
         self.btn_space = QToolButton(self)
-        self.btn_space.setText("v-HSV")
+        self.btn_space.setText(" v-HSV")
+        self.btn_space.setIcon(get_lucide_icon("sliders", color=self.icon_col, size=14))
+        self.btn_space.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_space.setToolTip("切换色彩空间 (v-HSV / HSV / HSL / HSY')")
         self.btn_space.clicked.connect(self._cycle_space)
 
@@ -847,6 +889,7 @@ class AdvancedToolBar(QWidget):
         pal = app.palette() if app else QPalette()
         text_main = pal.color(QPalette.ColorRole.WindowText).name()
         border_col = pal.color(QPalette.ColorRole.Mid).name()
+        self.icon_col = text_main
 
         qss = f"""
             QToolButton {{
@@ -871,7 +914,7 @@ class AdvancedToolBar(QWidget):
 
     def _cycle_gamut(self):
         masks = ["None", "Triad", "Sunset", "Complementary"]
-        labels = {"None": "Mask: Off", "Triad": "Mask: Triad", "Sunset": "Mask: Sunset", "Complementary": "Mask: Comp"}
+        labels = {"None": " Off", "Triad": " Triad", "Sunset": " Sunset", "Complementary": " Comp"}
         curr = getattr(self.docker.sv_square, 'gamut_mask', "None")
         next_idx = (masks.index(curr) + 1) % len(masks) if curr in masks else 0
         nxt = masks[next_idx]
@@ -883,21 +926,25 @@ class AdvancedToolBar(QWidget):
         self.docker.sv_square.lock_s = checked
         if checked:
             self.docker.sv_square.locked_s_val = self.docker.sv_square.s
-            self.btn_lock_s.setText("Lock S [ON]")
+            self.btn_lock_s.setIcon(get_lucide_icon("lock", color=self.icon_col, size=14))
+            self.btn_lock_s.setText(" S [ON]")
         else:
-            self.btn_lock_s.setText("Lock S")
+            self.btn_lock_s.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
+            self.btn_lock_s.setText(" S")
 
     def _toggle_lock_v(self, checked):
         self.docker.sv_square.lock_v = checked
         if checked:
             self.docker.sv_square.locked_v_val = self.docker.sv_square.v
-            self.btn_lock_v.setText("Lock V [ON]")
+            self.btn_lock_v.setIcon(get_lucide_icon("lock", color=self.icon_col, size=14))
+            self.btn_lock_v.setText(" V [ON]")
         else:
-            self.btn_lock_v.setText("Lock V")
+            self.btn_lock_v.setIcon(get_lucide_icon("unlock", color=self.icon_col, size=14))
+            self.btn_lock_v.setText(" V")
 
     def _cycle_space(self):
         modes = ["v-hsv", "hsv", "hsl", "hsy"]
-        labels = {"v-hsv": "v-HSV", "hsv": "HSV", "hsl": "HSL", "hsy": "HSY'"}
+        labels = {"v-hsv": " v-HSV", "hsv": " HSV", "hsl": " HSL", "hsy": " HSY'"}
         curr = self.docker.config.get("mode", "v-hsv")
         next_idx = (modes.index(curr) + 1) % len(modes) if curr in modes else 0
         nxt = modes[next_idx]
