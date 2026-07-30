@@ -249,8 +249,8 @@ class ColorHistory(QWidget):
         self.update()
             
     def addColor(self, c):
-        if not c: return
-        if self.colors[0].rgb() == c.rgb(): return
+        if not c or not c.isValid(): return
+        self.colors = [col for col in self.colors if col.rgb() != c.rgb()]
         self.colors.insert(0, QColor(c))
         if len(self.colors) > 60:
             self.colors = self.colors[:60]
@@ -1108,6 +1108,8 @@ class VhsvDocker(DockWidget):
             
             if qcolor != self.last_color:
                 self.last_color = qcolor
+                self.history.addColor(qcolor)
+                self.saveConfig()
 
                 if hasattr(self, '_internal_pick_color') and self._internal_pick_color == qcolor:
                     del self._internal_pick_color
