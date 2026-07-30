@@ -1078,6 +1078,27 @@ class VhsvDocker(DockWidget):
         self.timer.timeout.connect(self.checkKritaColor)
         self.timer.start()
 
+        try:
+            notifier = Krita.instance().notifier()
+            if notifier and hasattr(notifier, 'imageUpdated'):
+                notifier.imageUpdated.connect(self.onCanvasImageUpdated)
+        except Exception:
+            pass
+
+    def stage_pending_color(self, qcolor):
+        if qcolor and qcolor.isValid():
+            self._pending_history_color = QColor(qcolor)
+
+    def _commit_pending_history_color(self):
+        if hasattr(self, '_pending_history_color') and self._pending_history_color:
+            color = self._pending_history_color
+            self._pending_history_color = None
+            self.history.addColor(color)
+            self.saveConfig()
+
+    def onCanvasImageUpdated(self, image=None):
+        self._commit_pending_history_color()
+
     def show_color_preview(self, current_color, previous_color):
         if self.config.get("show_preview", True):
             if hasattr(self, '_hide_timer'):
@@ -1096,20 +1117,25 @@ class VhsvDocker(DockWidget):
         self.applyConfig()
         if hasattr(self, 'picker_container') and self.picker_container:
             self.picker_container.updateLayout()
-        
 
     def checkKritaColor(self):
         if not Krita.instance().activeWindow(): return
         view = Krita.instance().activeWindow().activeView()
         if not view: return
+
+        doc = Krita.instance().activeDocument()
+        if doc:
+            mod = doc.isModified()
+            if getattr(self, '_last_doc_mod', False) is False and mod is True:
+                self._commit_pending_history_color()
+            self._last_doc_mod = mod
         
         try:
             qcolor = view.foregroundColor().colorForCanvas(view.canvas())
             
             if qcolor != self.last_color:
                 self.last_color = qcolor
-                self.history.addColor(qcolor)
-                self.saveConfig()
+                self.stage_pending_color(qcolor)
 
                 if hasattr(self, '_internal_pick_color') and self._internal_pick_color == qcolor:
                     del self._internal_pick_color
@@ -1205,8 +1231,7 @@ class VhsvDocker(DockWidget):
         self.history.collapse()
 
     def onPickingEnded(self):
-        self.history.addColor(self.sv_square.current_color)
-        self.saveConfig()
+        self.stage_pending_color(self.sv_square.current_color)
 
     def onColorSelected(self, qcolor):
         if not Krita.instance().activeWindow(): return
