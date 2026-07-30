@@ -1124,11 +1124,14 @@ class VhsvDocker(DockWidget):
         if not view: return
 
         doc = Krita.instance().activeDocument()
-        if doc:
-            mod = doc.isModified()
-            if getattr(self, '_last_doc_mod', False) is False and mod is True:
-                self._commit_pending_history_color()
-            self._last_doc_mod = mod
+        if doc and hasattr(doc, 'modified'):
+            try:
+                mod = doc.modified()
+                if getattr(self, '_last_doc_mod', False) is False and mod is True:
+                    self._commit_pending_history_color()
+                self._last_doc_mod = mod
+            except Exception:
+                pass
         
         try:
             qcolor = view.foregroundColor().colorForCanvas(view.canvas())
