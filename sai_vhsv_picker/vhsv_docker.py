@@ -1052,19 +1052,27 @@ class VhsvDocker(DockWidget):
             
             if qcolor != self.last_color:
                 self.last_color = qcolor
+
+                if hasattr(self, '_internal_pick_color') and self._internal_pick_color == qcolor:
+                    del self._internal_pick_color
+                    return
                 
                 if not self.sv_square.is_picking and not self.hue_selector.is_picking:
                     mode = self.sv_square.mode
                     if mode == "hsl":
                         h, s, l, a = qcolor.getHslF()
-                        if h < 0: h = 0
-                        hue = h * 360.0
+                        if h >= 0:
+                            hue = h * 360.0
+                            self.hue_selector.hue = hue
+                            self.sv_square.hue = hue
                         self.sv_square.s = s
                         self.sv_square.v = l
                     elif mode == "hsy":
                         h, s, v, a = qcolor.getHsvF()
-                        if h < 0: h = 0
-                        hue = h * 360.0
+                        if h >= 0:
+                            hue = h * 360.0
+                            self.hue_selector.hue = hue
+                            self.sv_square.hue = hue
                         r, g, b = qcolor.redF(), qcolor.greenF(), qcolor.blueF()
                         y = 0.299 * r + 0.587 * g + 0.114 * b
                         max_rgb = max(r, g, b)
@@ -1074,8 +1082,10 @@ class VhsvDocker(DockWidget):
                         self.sv_square.v = y
                     elif mode == "v-hsv":
                         h, s, v, a = qcolor.getHsvF()
-                        if h < 0: h = 0
-                        hue = h * 360.0
+                        if h >= 0:
+                            hue = h * 360.0
+                            self.hue_selector.hue = hue
+                            self.sv_square.hue = hue
                         self.sv_square.v = v
                         if v == 0:
                             self.sv_square.s = 0.0
@@ -1084,15 +1094,14 @@ class VhsvDocker(DockWidget):
                             self.sv_square.s = math.pow(s, 1.5 / (v + 0.5))
                     else: # hsv
                         h, s, v, a = qcolor.getHsvF()
-                        if h < 0: h = 0
-                        hue = h * 360.0
+                        if h >= 0:
+                            hue = h * 360.0
+                            self.hue_selector.hue = hue
+                            self.sv_square.hue = hue
                         self.sv_square.s = s
                         self.sv_square.v = v
                         
-                    self.hue_selector.hue = hue
                     self.hue_selector.update()
-                    
-                    self.sv_square.hue = hue
                     self.sv_square.current_color = qcolor
                     self.sv_square.updateImage(force=True)
                     self.sv_square.update()
@@ -1156,6 +1165,7 @@ class VhsvDocker(DockWidget):
                 return
                 
         self._last_fg_update = now
+        self._internal_pick_color = qcolor
         
         try:
             ko_color = ManagedColor.fromQColor(qcolor)
