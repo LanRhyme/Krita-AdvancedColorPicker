@@ -771,8 +771,8 @@ class PickerContainer(QWidget):
             pw -= hist_size
             
         if self.style == "slider":
-            self.sv.setGeometry(px, py, pw - 25, ph)
-            self.hue.setGeometry(px + pw - 20, py, 20, ph)
+            self.sv.setGeometry(px, py, pw - 20, ph)
+            self.hue.setGeometry(px + pw - 16, py, 16, ph)
         else:
             size = min(pw, ph)
             x_offset = px + (pw - size) // 2
@@ -780,8 +780,7 @@ class PickerContainer(QWidget):
             
             self.hue.setGeometry(x_offset, y_offset, size, size)
             
-            inner_radius = size / 2.0 - 20
-            sq_size = int((inner_radius * 2) * 0.707) - 2
+            sq_size = int((size - 28) * 0.707)
             sq_x = x_offset + (size - sq_size) // 2
             sq_y = y_offset + (size - sq_size) // 2
             
@@ -980,8 +979,8 @@ class VhsvDocker(DockWidget):
             
         self.main_widget = QWidget()
         self.main_layout = QVBoxLayout()
-        self.main_layout.setContentsMargins(5, 5, 5, 5)
-        self.main_layout.setSpacing(2)
+        self.main_layout.setContentsMargins(2, 2, 2, 2)
+        self.main_layout.setSpacing(1)
         
         self.sv_square = SVSquare()
         self.hue_selector = HueSelector()
@@ -1054,24 +1053,45 @@ class VhsvDocker(DockWidget):
                 self.last_color = qcolor
                 
                 if not self.sv_square.is_picking and not self.hue_selector.is_picking:
-                    h, s, v, a = qcolor.getHsvF()
-                    if h < 0: h = 0
-                    
-                    hue = h * 360.0
-                    self.hue_selector.hue = hue
-                    self.hue_selector.update()
-                    
-                    self.sv_square.hue = hue
-                    self.sv_square.v = v
-                    if self.sv_square.mode == "v-hsv":
+                    mode = self.sv_square.mode
+                    if mode == "hsl":
+                        h, s, l, a = qcolor.getHslF()
+                        if h < 0: h = 0
+                        hue = h * 360.0
+                        self.sv_square.s = s
+                        self.sv_square.v = l
+                    elif mode == "hsy":
+                        h, s, v, a = qcolor.getHsvF()
+                        if h < 0: h = 0
+                        hue = h * 360.0
+                        r, g, b = qcolor.redF(), qcolor.greenF(), qcolor.blueF()
+                        y = 0.299 * r + 0.587 * g + 0.114 * b
+                        max_rgb = max(r, g, b)
+                        min_rgb = min(r, g, b)
+                        s_hsy = (max_rgb - min_rgb) / max_rgb if max_rgb > 0 else 0.0
+                        self.sv_square.s = s_hsy
+                        self.sv_square.v = y
+                    elif mode == "v-hsv":
+                        h, s, v, a = qcolor.getHsvF()
+                        if h < 0: h = 0
+                        hue = h * 360.0
+                        self.sv_square.v = v
                         if v == 0:
                             self.sv_square.s = 0.0
                         else:
                             import math
                             self.sv_square.s = math.pow(s, 1.5 / (v + 0.5))
-                    else:
+                    else: # hsv
+                        h, s, v, a = qcolor.getHsvF()
+                        if h < 0: h = 0
+                        hue = h * 360.0
                         self.sv_square.s = s
+                        self.sv_square.v = v
                         
+                    self.hue_selector.hue = hue
+                    self.hue_selector.update()
+                    
+                    self.sv_square.hue = hue
                     self.sv_square.current_color = qcolor
                     self.sv_square.updateImage(force=True)
                     self.sv_square.update()
