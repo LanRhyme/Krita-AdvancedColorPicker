@@ -782,14 +782,6 @@ class VhsvDocker(DockWidget):
         self.sv_square.pickingEnded.connect(self.onPickingEnded)
         self.history.colorSelected.connect(self.onHistorySelected)
 
-    def show_color_preview(self, current_color, previous_color):
-        if self.config.get("show_preview", True):
-            self.color_preview.update_color(current_color, previous_color)
-            self.color_preview.popup_at(docker_widget=self)
-
-    def hide_color_preview(self):
-        self.color_preview.hide()
-        
         self.applyConfig()
         
         self.last_color = QColor()
@@ -797,6 +789,20 @@ class VhsvDocker(DockWidget):
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.checkKritaColor)
         self.timer.start()
+
+    def show_color_preview(self, current_color, previous_color):
+        if self.config.get("show_preview", True):
+            self.color_preview.update_color(current_color, previous_color)
+            self.color_preview.popup_at(docker_widget=self)
+
+    def hide_color_preview(self):
+        self.color_preview.hide()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.applyConfig()
+        if hasattr(self, 'picker_container') and self.picker_container:
+            self.picker_container.updateLayout()
         
 
     def checkKritaColor(self):
