@@ -53,9 +53,13 @@ class ColorSwatchWidget(QWidget):
 class ColorPreviewPopup(QFrame):
     """精简 Pigment.O 灵感风格 Morandi 色彩对比 HUD 浮窗"""
     def __init__(self, parent=None):
+        WT = getattr(Qt, 'WindowType', None)
         flags = (
-            getattr(Qt, 'ToolTip', getattr(getattr(Qt, 'WindowType', None), 'ToolTip', 0)) |
-            getattr(Qt, 'FramelessWindowHint', getattr(getattr(Qt, 'WindowType', None), 'FramelessWindowHint', 0))
+            getattr(Qt, 'ToolTip', getattr(WT, 'ToolTip', 0)) |
+            getattr(Qt, 'FramelessWindowHint', getattr(WT, 'FramelessWindowHint', 0)) |
+            getattr(Qt, 'WindowStaysOnTopHint', getattr(WT, 'WindowStaysOnTopHint', 0)) |
+            getattr(Qt, 'WindowDoesNotAcceptFocus', getattr(WT, 'WindowDoesNotAcceptFocus', 0)) |
+            getattr(Qt, 'WindowTransparentForInput', getattr(WT, 'WindowTransparentForInput', 0))
         )
         super().__init__(None, flags)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -147,36 +151,52 @@ class ColorPreviewPopup(QFrame):
         w = max(180, self.width())
         h = max(90, self.height())
 
-        screen = QApplication.primaryScreen()
+        cursor_pos = QCursor.pos()
+
+        screen = None
+        if docker_widget:
+            try:
+                win = docker_widget.window()
+                if win and hasattr(win, 'windowHandle') and win.windowHandle():
+                    screen = win.windowHandle().screen()
+            except Exception:
+                pass
+
+        if not screen:
+            app = QApplication.instance()
+            if hasattr(QGuiApplication, 'screenAt'):
+                screen = QGuiApplication.screenAt(cursor_pos)
+            if not screen and app:
+                screen = app.primaryScreen()
+
         geo = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
 
         if docker_widget and docker_widget.isVisible():
-            d_left = docker_widget.mapToGlobal(QPoint(0, 0)).x()
-            d_right = docker_widget.mapToGlobal(QPoint(docker_widget.width(), 0)).x()
-            d_top = docker_widget.mapToGlobal(QPoint(0, 0)).y()
+            docker_global = docker_widget.mapToGlobal(QPoint(0, 0))
+            d_left = docker_global.x()
+            d_right = d_left + docker_widget.width()
+            d_top = docker_global.y()
             d_height = docker_widget.height()
 
-            if d_left - geo.left() >= w + 10:
-                x = d_left - w - 8
-            elif geo.right() - d_right >= w + 10:
-                x = d_right + 8
+            center_x = (d_left + d_right) / 2.0
+            screen_center_x = (geo.left() + geo.right()) / 2.0
+
+            if center_x >= screen_center_x:
+                x = d_left - w - 12
+                if x < geo.left() + 5:
+                    x = d_right + 12
             else:
-                pos = QCursor.pos()
-                x = pos.x() + 20
-                if x + w > geo.right():
-                    x = pos.x() - w - 20
+                x = d_right + 12
+                if x + w > geo.right() - 5:
+                    x = d_left - w - 12
 
             y = d_top + (d_height - h) // 2
-            if y + h > geo.bottom() - 10:
-                y = geo.bottom() - h - 10
-            if y < geo.top() + 10:
-                y = geo.top() + 10
+            y = max(geo.top() + 5, min(geo.bottom() - h - 5, y))
         else:
-            pos = QCursor.pos()
-            x = pos.x() + 20
-            y = pos.y() - 40
+            x = cursor_pos.x() + 20
+            y = cursor_pos.y() - 40
 
-        self.move(x, y)
+        self.move(int(x), int(y))
         if not self.isVisible():
             self.show()
         self.raise_()
