@@ -4,6 +4,15 @@ from krita import *
 from .qt_compat import *
 from .lucide_icons import get_lucide_icon
 
+def get_event_pos(event):
+    if hasattr(event, 'position'):
+        return event.position().toPoint()
+    elif hasattr(event, 'posF'):
+        return event.posF().toPoint()
+    elif hasattr(event, 'pos'):
+        return event.pos()
+    return QPoint(0, 0)
+
 class ColorSwatchWidget(QWidget):
     """双色对比无缝矩形色块 (左: 当前新颜色, 右: 历史原颜色，0 缝隙极致易对比)"""
     def __init__(self, parent=None):
@@ -533,7 +542,10 @@ class SVSquare(QWidget):
         self.locked_s_val = self.s
         self.locked_v_val = self.v
         self.pickingStarted.emit()
-        self.updateValue(event.pos())
+        self.updateValue(get_event_pos(event))
+
+    def mouseMoveEvent(self, event):
+        self.updateValue(get_event_pos(event))
 
     def mouseReleaseEvent(self, event):
         if event.button() == RightButton:
@@ -555,7 +567,7 @@ class SVSquare(QWidget):
                 else:
                     self.previous_color = self.current_color
                 self.pickingStarted.emit()
-            self.updateValue(event.pos())
+            self.updateValue(get_event_pos(event))
             event.accept()
         elif ev_type == QEvent.Type.TabletRelease:
             self.is_picking = False
@@ -767,7 +779,7 @@ class HueSelector(QWidget):
             return
         self.is_picking = True
         self.pickingStarted.emit()
-        self.updateHue(event.pos())
+        self.updateHue(get_event_pos(event))
         if hasattr(self, 'docker') and self.docker and hasattr(self.docker, 'sv_square'):
             self.docker.show_color_preview(self.docker.sv_square.current_color, self.docker.sv_square.previous_color)
 
@@ -780,7 +792,7 @@ class HueSelector(QWidget):
         self.pickingEnded.emit()
         
     def mouseMoveEvent(self, event):
-        self.updateHue(event.pos())
+        self.updateHue(get_event_pos(event))
 
     def tabletEvent(self, event):
         ev_type = event.type()
@@ -788,7 +800,7 @@ class HueSelector(QWidget):
             if not self.is_picking:
                 self.is_picking = True
                 self.pickingStarted.emit()
-            self.updateHue(event.pos())
+            self.updateHue(get_event_pos(event))
             if hasattr(self, 'docker') and self.docker and hasattr(self.docker, 'sv_square'):
                 self.docker.show_color_preview(self.docker.sv_square.current_color, self.docker.sv_square.previous_color)
             event.accept()
