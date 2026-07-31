@@ -134,11 +134,9 @@ class ColorPreviewPopup(QFrame):
         self.update()
 
     def popup_at(self, docker_widget=None):
-        if self.isVisible():
-            self.card.update()
-            self.update()
-            self.raise_()
-            return
+        self.adjustSize()
+        w = max(180, self.width())
+        h = max(90, self.height())
 
         screen = QApplication.primaryScreen()
         geo = screen.availableGeometry() if screen else QRect(0, 0, 1920, 1080)
@@ -149,25 +147,29 @@ class ColorPreviewPopup(QFrame):
             d_top = docker_widget.mapToGlobal(QPoint(0, 0)).y()
             d_height = docker_widget.height()
 
-            if d_left - geo.left() >= self.width() + 10:
-                x = d_left - self.width() - 8
-            elif geo.right() - d_right >= self.width() + 10:
+            if d_left - geo.left() >= w + 10:
+                x = d_left - w - 8
+            elif geo.right() - d_right >= w + 10:
                 x = d_right + 8
             else:
-                x = d_left + 16
+                pos = QCursor.pos()
+                x = pos.x() + 20
+                if x + w > geo.right():
+                    x = pos.x() - w - 20
 
-            y = d_top + (d_height - self.height()) // 2
-            if y + self.height() > geo.bottom():
-                y = geo.bottom() - self.height() - 8
-            if y < geo.top():
-                y = geo.top() + 8
+            y = d_top + (d_height - h) // 2
+            if y + h > geo.bottom() - 10:
+                y = geo.bottom() - h - 10
+            if y < geo.top() + 10:
+                y = geo.top() + 10
         else:
             pos = QCursor.pos()
-            x = pos.x() + 16
-            y = pos.y() - 50
+            x = pos.x() + 20
+            y = pos.y() - 40
 
         self.move(x, y)
-        self.show()
+        if not self.isVisible():
+            self.show()
         self.raise_()
         self.card.update()
         self.update()
@@ -533,9 +535,6 @@ class SVSquare(QWidget):
         self.pickingStarted.emit()
         self.updateValue(event.pos())
 
-    def mouseMoveEvent(self, event):
-        self.updateValue(event.pos())
-        
     def mouseReleaseEvent(self, event):
         if event.button() == RightButton:
             return
@@ -544,6 +543,27 @@ class SVSquare(QWidget):
             self.docker.hide_color_preview()
         self.pickingEnded.emit()
         self.update()
+
+    def tabletEvent(self, event):
+        ev_type = event.type()
+        if ev_type in (QEvent.Type.TabletPress, QEvent.Type.TabletMove):
+            if not self.is_picking:
+                self.is_picking = True
+                if Krita.instance().activeWindow() and Krita.instance().activeWindow().activeView():
+                    fg = Krita.instance().activeWindow().activeView().foregroundColor()
+                    self.previous_color = fg.colorForCanvas(Krita.instance().activeWindow().activeView().canvas())
+                else:
+                    self.previous_color = self.current_color
+                self.pickingStarted.emit()
+            self.updateValue(event.pos())
+            event.accept()
+        elif ev_type == QEvent.Type.TabletRelease:
+            self.is_picking = False
+            if hasattr(self, 'docker') and self.docker:
+                self.docker.hide_color_preview()
+            self.pickingEnded.emit()
+            self.update()
+            event.accept()
 
     def _clamp_point_to_polygon(self, poly, pt):
         if poly.containsPoint(pt, Qt.FillRule.OddEvenFill):
@@ -761,6 +781,23 @@ class HueSelector(QWidget):
         
     def mouseMoveEvent(self, event):
         self.updateHue(event.pos())
+
+    def tabletEvent(self, event):
+        ev_type = event.type()
+        if ev_type in (QEvent.Type.TabletPress, QEvent.Type.TabletMove):
+            if not self.is_picking:
+                self.is_picking = True
+                self.pickingStarted.emit()
+            self.updateHue(event.pos())
+            if hasattr(self, 'docker') and self.docker and hasattr(self.docker, 'sv_square'):
+                self.docker.show_color_preview(self.docker.sv_square.current_color, self.docker.sv_square.previous_color)
+            event.accept()
+        elif ev_type == QEvent.Type.TabletRelease:
+            self.is_picking = False
+            if hasattr(self, 'docker') and self.docker:
+                self.docker.hide_color_preview()
+            self.pickingEnded.emit()
+            event.accept()
 
     def updateHue(self, pos):
         if self.style == "slider":
