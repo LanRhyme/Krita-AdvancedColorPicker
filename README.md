@@ -1,3 +1,5 @@
+<div align="center">
+
 # Advanced Color Picker (V-HSV)
 
 <a href="https://qm.qq.com/q/mtg1yNCi1q">
@@ -8,10 +10,9 @@
   <a href="https://afdian.com/a/LanRhyme" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/badge/afdian-@LanRhyme-946ce6?style=for-the-badge&logo=afdian&logoColor=white" alt="afdian"></a>
 
+</div>
 
 ![Screenshot](screenshot.png)
-
-
 
 完美复刻 SAI 色彩特性的 V-HSV 拾色器
 
